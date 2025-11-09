@@ -1,0 +1,206 @@
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import Header from "@/components/Header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Heart, Camera, Loader2, ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+
+const ProductDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+
+        const { data, error } = await supabase
+          .from("glasses_products")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        setProduct(data);
+
+        if (user) {
+          const { data: favData } = await supabase
+            .from("user_favorites")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("product_id", id)
+            .single();
+          setIsFavorite(!!favData);
+        }
+      } catch (error) {
+        console.error("Error fetching product:", error);
+        toast.error("Failed to load product");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id]);
+
+  const toggleFavorite = async () => {
+    if (!user) {
+      toast.error("Please sign in to save favorites");
+      return;
+    }
+
+    try {
+      if (isFavorite) {
+        await supabase
+          .from("user_favorites")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("product_id", id);
+        setIsFavorite(false);
+        toast.success("Removed from favorites");
+      } else {
+        await supabase
+          .from("user_favorites")
+          .insert({ user_id: user.id, product_id: id });
+        setIsFavorite(true);
+        toast.success("Added to favorites");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update favorites");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container py-8 px-4">
+          <p className="text-center text-muted-foreground">Product not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container py-8 px-4">
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/browse")}
+          className="mb-6"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Browse
+        </Button>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <Card className="overflow-hidden">
+              <img
+                src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
+                alt={product.name}
+                className="w-full aspect-square object-cover"
+              />
+            </Card>
+            <Button variant="outline" className="w-full" size="lg">
+              <Camera className="mr-2 h-5 w-5" />
+              Virtual Try-On
+            </Button>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">{product.name}</h1>
+              <p className="text-xl text-muted-foreground">{product.brand}</p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="text-base px-3 py-1">
+                {product.frame_style.split("_").map((word: string) => 
+                  word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(" ")}
+              </Badge>
+              <Badge variant="outline" className="text-base px-3 py-1">
+                {product.frame_color}
+              </Badge>
+            </div>
+
+            <p className="text-3xl font-bold text-primary">${product.price}</p>
+
+            {product.description && (
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="font-semibold mb-2">Description</h3>
+                  <p className="text-muted-foreground">{product.description}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardContent className="pt-6 space-y-3">
+                <h3 className="font-semibold mb-3">Specifications</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Material</p>
+                    <p className="font-medium">{product.frame_material}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Gender</p>
+                    <p className="font-medium capitalize">{product.gender}</p>
+                  </div>
+                  {product.lens_width && (
+                    <div>
+                      <p className="text-muted-foreground">Lens Width</p>
+                      <p className="font-medium">{product.lens_width}mm</p>
+                    </div>
+                  )}
+                  {product.bridge_width && (
+                    <div>
+                      <p className="text-muted-foreground">Bridge Width</p>
+                      <p className="font-medium">{product.bridge_width}mm</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-3">
+              <Button size="lg" className="flex-1">
+                Add to Cart
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={toggleFavorite}
+              >
+                <Heart className={`h-5 w-5 ${isFavorite ? "fill-secondary text-secondary" : ""}`} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default ProductDetail;
