@@ -78,6 +78,40 @@ const ProductDetail = () => {
     }
   };
 
+  const addToCart = async () => {
+    if (!user) {
+      toast.error("Please sign in to add to cart");
+      return;
+    }
+
+    try {
+      // Check if item already in cart
+      const { data: existing } = await supabase
+        .from("cart_items")
+        .select("id, quantity")
+        .eq("user_id", user.id)
+        .eq("product_id", id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update quantity
+        await supabase
+          .from("cart_items")
+          .update({ quantity: existing.quantity + 1 })
+          .eq("id", existing.id);
+      } else {
+        // Add new item
+        await supabase
+          .from("cart_items")
+          .insert({ user_id: user.id, product_id: id, quantity: 1 });
+      }
+      
+      toast.success("Added to cart");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add to cart");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -185,15 +219,20 @@ const ProductDetail = () => {
             </Card>
 
             <div className="flex gap-3">
-              <Button size="lg" className="flex-1">
+              <Button 
+                size="lg" 
+                className="flex-1 transition-all hover:scale-105"
+                onClick={addToCart}
+              >
                 Add to Cart
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 onClick={toggleFavorite}
+                className="transition-all hover:scale-105"
               >
-                <Heart className={`h-5 w-5 ${isFavorite ? "fill-secondary text-secondary" : ""}`} />
+                <Heart className={`h-5 w-5 ${isFavorite ? "fill-primary text-primary" : ""}`} />
               </Button>
             </div>
           </div>

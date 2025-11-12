@@ -71,31 +71,31 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
   return (
     <Link to={`/product/${product.id}`}>
-      <Card className="overflow-hidden hover:shadow-elegant transition-shadow duration-300 group">
+      <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group border-border/50">
         <div className="relative aspect-square overflow-hidden bg-muted">
           <img
             src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
           />
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm hover:bg-background"
+            className="absolute top-3 right-3 bg-background/90 backdrop-blur-sm hover:bg-background hover:scale-110 transition-all duration-300"
             onClick={toggleFavorite}
           >
             <Heart
-              className={`h-5 w-5 ${isFavorite ? "fill-secondary text-secondary" : ""}`}
+              className={`h-5 w-5 transition-all duration-300 ${isFavorite ? "fill-primary text-primary" : ""}`}
             />
           </Button>
         </div>
-        <CardContent className="p-4 space-y-2">
-          <h3 className="font-semibold text-lg">{product.name}</h3>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{product.brand}</span>
-            <span className="text-sm text-muted-foreground">{product.frame_color}</span>
+        <CardContent className="p-5 space-y-2">
+          <h3 className="font-semibold text-lg line-clamp-1">{product.name}</h3>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>{product.brand}</span>
+            <span>{product.frame_color}</span>
           </div>
-          <p className="text-xl font-bold text-primary">${product.price}</p>
+          <p className="text-xl font-bold">${product.price}</p>
         </CardContent>
       </Card>
     </Link>

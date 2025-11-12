@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Glasses, Heart, User, LogOut, Menu, X } from "lucide-react";
+import { Glasses, Heart, User, LogOut, Menu, X, ShoppingCart } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,19 +16,35 @@ import { toast } from "sonner";
 const Header = () => {
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) fetchCartCount(session.user.id);
+      else setCartCount(0);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user) fetchCartCount(session.user.id);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchCartCount = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("cart_items")
+      .select("quantity")
+      .eq("user_id", userId);
+
+    if (!error && data) {
+      const total = data.reduce((sum, item) => sum + item.quantity, 0);
+      setCartCount(total);
+    }
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -53,6 +70,22 @@ const Header = () => {
               <Link to="/favorites" className="text-sm font-medium hover:text-primary transition-colors">
                 <Heart className="h-5 w-5" />
               </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/cart")}
+                className="relative hover:scale-105 transition-transform"
+              >
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <Badge 
+                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                    variant="default"
+                  >
+                    {cartCount}
+                  </Badge>
+                )}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon">
@@ -108,6 +141,13 @@ const Header = () => {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Favorites
+              </Link>
+              <Link
+                to="/cart"
+                className="block py-2 text-sm font-medium hover:text-primary transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Cart {cartCount > 0 && `(${cartCount})`}
               </Link>
               <Link
                 to="/profile"
