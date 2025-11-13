@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Share2 } from "lucide-react";
+import { toast } from "sonner";
 
 const Favorites = () => {
   const [favorites, setFavorites] = useState<any[]>([]);
@@ -44,9 +46,38 @@ const Favorites = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container py-8 px-4">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Your Favorites</h1>
-          <p className="text-muted-foreground">Glasses you've saved for later</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Your Favorites</h1>
+            <p className="text-muted-foreground">Glasses you've saved for later</p>
+          </div>
+          {favorites.length > 0 && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={async () => {
+                const shareText = `Check out my favorite glasses on FitFrame!\n${window.location.origin}/favorites`;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({
+                      title: "My FitFrame Favorites",
+                      text: shareText,
+                      url: window.location.href,
+                    });
+                    toast.success("Shared successfully!");
+                  } else {
+                    await navigator.clipboard.writeText(shareText);
+                    toast.success("Link copied to clipboard!");
+                  }
+                } catch (error) {
+                  console.error("Error sharing:", error);
+                }
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+              Share Collection
+            </Button>
+          )}
         </div>
 
         {loading ? (

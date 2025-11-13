@@ -5,8 +5,9 @@ import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Camera, Loader2, ArrowLeft } from "lucide-react";
+import { Heart, Camera, Loader2, ArrowLeft, Share2 } from "lucide-react";
 import { toast } from "sonner";
+import ARTryOn from "@/components/ARTryOn";
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -15,6 +16,7 @@ const ProductDetail = () => {
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [showARTryOn, setShowARTryOn] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -112,6 +114,26 @@ const ProductDetail = () => {
     }
   };
 
+  const shareProduct = async () => {
+    const shareData = {
+      title: `${product.brand} ${product.name}`,
+      text: `Check out these ${product.name} glasses from ${product.brand} on FitFrame!`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toast.success("Shared successfully!");
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (error) {
+      console.error("Error sharing:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -156,7 +178,12 @@ const ProductDetail = () => {
                 className="w-full aspect-square object-cover"
               />
             </Card>
-            <Button variant="outline" className="w-full" size="lg">
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              size="lg"
+              onClick={() => setShowARTryOn(true)}
+            >
               <Camera className="mr-2 h-5 w-5" />
               Virtual Try-On
             </Button>
@@ -234,10 +261,22 @@ const ProductDetail = () => {
               >
                 <Heart className={`h-5 w-5 ${isFavorite ? "fill-primary text-primary" : ""}`} />
               </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={shareProduct}
+                className="transition-all hover:scale-105"
+              >
+                <Share2 className="h-5 w-5" />
+              </Button>
             </div>
           </div>
         </div>
       </main>
+
+      {showARTryOn && (
+        <ARTryOn product={product} onClose={() => setShowARTryOn(false)} />
+      )}
     </div>
   );
 };
