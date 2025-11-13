@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -24,6 +25,8 @@ const Profile = () => {
   const [faceShape, setFaceShape] = useState("");
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [notificationEmail, setNotificationEmail] = useState(true);
+  const [notificationPush, setNotificationPush] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,6 +51,8 @@ const Profile = () => {
         setFaceShape(data.face_shape || "");
         setSelectedStyles(data.preferred_styles || []);
         setSelectedColors(data.preferred_colors || []);
+        setNotificationEmail(data.notification_email ?? true);
+        setNotificationPush(data.notification_push ?? false);
       } catch (error) {
         console.error("Error fetching profile:", error);
       } finally {
@@ -81,6 +86,8 @@ const Profile = () => {
           face_shape: faceShape as any,
           preferred_styles: selectedStyles as any,
           preferred_colors: selectedColors,
+          notification_email: notificationEmail,
+          notification_push: notificationPush,
         })
         .eq("id", profile.id);
 
@@ -190,6 +197,44 @@ const Profile = () => {
             <Button onClick={handleSave} disabled={saving} className="w-full">
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-elegant mt-6">
+          <CardHeader>
+            <CardTitle>Notification Preferences</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Email Notifications</Label>
+                <p className="text-sm text-muted-foreground">
+                  Receive updates about new arrivals and offers
+                </p>
+              </div>
+              <Switch
+                checked={notificationEmail}
+                onCheckedChange={setNotificationEmail}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Push Notifications</Label>
+                <p className="text-sm text-muted-foreground">
+                  Get instant alerts for order updates
+                </p>
+              </div>
+              <Switch
+                checked={notificationPush}
+                onCheckedChange={setNotificationPush}
+              />
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} className="w-full">
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Preferences
             </Button>
           </CardContent>
         </Card>

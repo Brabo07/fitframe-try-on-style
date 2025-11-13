@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const { trackEvent } = useAnalytics();
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
@@ -116,6 +118,13 @@ const Checkout = () => {
         .eq("user_id", user.id);
 
       if (clearError) throw clearError;
+
+      // Track successful purchase
+      trackEvent("purchase_completed", {
+        order_id: order.id,
+        total_amount: order.total_amount,
+        items_count: cartItems.length,
+      });
 
       setOrderComplete(true);
       toast.success("Order placed successfully!");

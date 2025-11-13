@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Camera, Loader2, ArrowLeft, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import ARTryOn from "@/components/ARTryOn";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { trackEvent } = useAnalytics();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -42,6 +44,15 @@ const ProductDetail = () => {
             .single();
           setIsFavorite(!!favData);
         }
+
+        // Track product view
+        if (user && data) {
+          trackEvent("product_view", {
+            product_id: data.id,
+            product_name: data.name,
+            product_brand: data.brand,
+          });
+        }
       } catch (error) {
         console.error("Error fetching product:", error);
         toast.error("Failed to load product");
@@ -68,12 +79,14 @@ const ProductDetail = () => {
           .eq("product_id", id);
         setIsFavorite(false);
         toast.success("Removed from favorites");
+        trackEvent("favorite_removed", { product_id: id, product_name: product?.name });
       } else {
         await supabase
           .from("user_favorites")
           .insert({ user_id: user.id, product_id: id });
         setIsFavorite(true);
         toast.success("Added to favorites");
+        trackEvent("favorite_added", { product_id: id, product_name: product?.name });
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to update favorites");
@@ -109,6 +122,7 @@ const ProductDetail = () => {
       }
       
       toast.success("Added to cart");
+      trackEvent("add_to_cart", { product_id: id, product_name: product?.name, product_price: product?.price });
     } catch (error: any) {
       toast.error(error.message || "Failed to add to cart");
     }
@@ -182,7 +196,10 @@ const ProductDetail = () => {
               variant="outline" 
               className="w-full" 
               size="lg"
-              onClick={() => setShowARTryOn(true)}
+              onClick={() => {
+                setShowARTryOn(true);
+                trackEvent("ar_tryon_opened", { product_id: id, product_name: product?.name });
+              }}
             >
               <Camera className="mr-2 h-5 w-5" />
               Virtual Try-On

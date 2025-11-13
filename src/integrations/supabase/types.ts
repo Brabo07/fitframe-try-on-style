@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_events: {
+        Row: {
+          created_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       cart_items: {
         Row: {
           created_at: string
@@ -192,6 +216,8 @@ export type Database = {
           full_name: string | null
           gender: Database["public"]["Enums"]["gender_type"] | null
           id: string
+          notification_email: boolean | null
+          notification_push: boolean | null
           onboarding_completed: boolean | null
           preferred_colors: string[] | null
           preferred_styles: Database["public"]["Enums"]["frame_style"][] | null
@@ -206,6 +232,8 @@ export type Database = {
           full_name?: string | null
           gender?: Database["public"]["Enums"]["gender_type"] | null
           id?: string
+          notification_email?: boolean | null
+          notification_push?: boolean | null
           onboarding_completed?: boolean | null
           preferred_colors?: string[] | null
           preferred_styles?: Database["public"]["Enums"]["frame_style"][] | null
@@ -220,6 +248,8 @@ export type Database = {
           full_name?: string | null
           gender?: Database["public"]["Enums"]["gender_type"] | null
           id?: string
+          notification_email?: boolean | null
+          notification_push?: boolean | null
           onboarding_completed?: boolean | null
           preferred_colors?: string[] | null
           preferred_styles?: Database["public"]["Enums"]["frame_style"][] | null
@@ -258,14 +288,42 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       face_shape: "oval" | "round" | "square" | "heart" | "diamond" | "oblong"
       frame_material:
         | "metal"
@@ -410,6 +468,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       face_shape: ["oval", "round", "square", "heart", "diamond", "oblong"],
       frame_material: [
         "metal",
