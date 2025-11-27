@@ -3,15 +3,30 @@ import { FaceMesh, Results } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 
 export interface FaceLandmarks {
+  // Eye landmarks
   leftEyeOuter: { x: number; y: number };
   leftEyeInner: { x: number; y: number };
   rightEyeOuter: { x: number; y: number };
   rightEyeInner: { x: number; y: number };
+  leftEyeCenter: { x: number; y: number };
+  rightEyeCenter: { x: number; y: number };
+  
+  // Nose landmarks for bridge positioning and occlusion
   noseBridge: { x: number; y: number };
   noseTop: { x: number; y: number };
+  noseTip: { x: number; y: number; z: number }; // Include Z for depth
+  
+  // Face metrics
   faceWidth: number;
   eyeDistance: number;
+  faceDepth: number; // Estimated depth for scaling
+  
+  // Head rotation
   rotation: { pitch: number; yaw: number; roll: number };
+  
+  // Temple points for glasses arms
+  leftTemple: { x: number; y: number };
+  rightTemple: { x: number; y: number };
 }
 
 interface UseFaceTrackingProps {
@@ -32,37 +47,61 @@ class LandmarkSmoother {
     }
 
     const prev = this.history[this.history.length - 1];
+    const sf = this.smoothingFactor;
+    
     const smoothed: FaceLandmarks = {
       leftEyeOuter: {
-        x: prev.leftEyeOuter.x + this.smoothingFactor * (current.leftEyeOuter.x - prev.leftEyeOuter.x),
-        y: prev.leftEyeOuter.y + this.smoothingFactor * (current.leftEyeOuter.y - prev.leftEyeOuter.y),
+        x: prev.leftEyeOuter.x + sf * (current.leftEyeOuter.x - prev.leftEyeOuter.x),
+        y: prev.leftEyeOuter.y + sf * (current.leftEyeOuter.y - prev.leftEyeOuter.y),
       },
       leftEyeInner: {
-        x: prev.leftEyeInner.x + this.smoothingFactor * (current.leftEyeInner.x - prev.leftEyeInner.x),
-        y: prev.leftEyeInner.y + this.smoothingFactor * (current.leftEyeInner.y - prev.leftEyeInner.y),
+        x: prev.leftEyeInner.x + sf * (current.leftEyeInner.x - prev.leftEyeInner.x),
+        y: prev.leftEyeInner.y + sf * (current.leftEyeInner.y - prev.leftEyeInner.y),
       },
       rightEyeOuter: {
-        x: prev.rightEyeOuter.x + this.smoothingFactor * (current.rightEyeOuter.x - prev.rightEyeOuter.x),
-        y: prev.rightEyeOuter.y + this.smoothingFactor * (current.rightEyeOuter.y - prev.rightEyeOuter.y),
+        x: prev.rightEyeOuter.x + sf * (current.rightEyeOuter.x - prev.rightEyeOuter.x),
+        y: prev.rightEyeOuter.y + sf * (current.rightEyeOuter.y - prev.rightEyeOuter.y),
       },
       rightEyeInner: {
-        x: prev.rightEyeInner.x + this.smoothingFactor * (current.rightEyeInner.x - prev.rightEyeInner.x),
-        y: prev.rightEyeInner.y + this.smoothingFactor * (current.rightEyeInner.y - prev.rightEyeInner.y),
+        x: prev.rightEyeInner.x + sf * (current.rightEyeInner.x - prev.rightEyeInner.x),
+        y: prev.rightEyeInner.y + sf * (current.rightEyeInner.y - prev.rightEyeInner.y),
+      },
+      leftEyeCenter: {
+        x: prev.leftEyeCenter.x + sf * (current.leftEyeCenter.x - prev.leftEyeCenter.x),
+        y: prev.leftEyeCenter.y + sf * (current.leftEyeCenter.y - prev.leftEyeCenter.y),
+      },
+      rightEyeCenter: {
+        x: prev.rightEyeCenter.x + sf * (current.rightEyeCenter.x - prev.rightEyeCenter.x),
+        y: prev.rightEyeCenter.y + sf * (current.rightEyeCenter.y - prev.rightEyeCenter.y),
       },
       noseBridge: {
-        x: prev.noseBridge.x + this.smoothingFactor * (current.noseBridge.x - prev.noseBridge.x),
-        y: prev.noseBridge.y + this.smoothingFactor * (current.noseBridge.y - prev.noseBridge.y),
+        x: prev.noseBridge.x + sf * (current.noseBridge.x - prev.noseBridge.x),
+        y: prev.noseBridge.y + sf * (current.noseBridge.y - prev.noseBridge.y),
       },
       noseTop: {
-        x: prev.noseTop.x + this.smoothingFactor * (current.noseTop.x - prev.noseTop.x),
-        y: prev.noseTop.y + this.smoothingFactor * (current.noseTop.y - prev.noseTop.y),
+        x: prev.noseTop.x + sf * (current.noseTop.x - prev.noseTop.x),
+        y: prev.noseTop.y + sf * (current.noseTop.y - prev.noseTop.y),
       },
-      faceWidth: prev.faceWidth + this.smoothingFactor * (current.faceWidth - prev.faceWidth),
-      eyeDistance: prev.eyeDistance + this.smoothingFactor * (current.eyeDistance - prev.eyeDistance),
+      noseTip: {
+        x: prev.noseTip.x + sf * (current.noseTip.x - prev.noseTip.x),
+        y: prev.noseTip.y + sf * (current.noseTip.y - prev.noseTip.y),
+        z: prev.noseTip.z + sf * (current.noseTip.z - prev.noseTip.z),
+      },
+      leftTemple: {
+        x: prev.leftTemple.x + sf * (current.leftTemple.x - prev.leftTemple.x),
+        y: prev.leftTemple.y + sf * (current.leftTemple.y - prev.leftTemple.y),
+      },
+      rightTemple: {
+        x: prev.rightTemple.x + sf * (current.rightTemple.x - prev.rightTemple.x),
+        y: prev.rightTemple.y + sf * (current.rightTemple.y - prev.rightTemple.y),
+      },
+      faceWidth: prev.faceWidth + sf * (current.faceWidth - prev.faceWidth),
+      eyeDistance: prev.eyeDistance + sf * (current.eyeDistance - prev.eyeDistance),
+      faceDepth: prev.faceDepth + sf * (current.faceDepth - prev.faceDepth),
       rotation: {
-        pitch: prev.rotation.pitch + this.smoothingFactor * (current.rotation.pitch - prev.rotation.pitch),
-        yaw: prev.rotation.yaw + this.smoothingFactor * (current.rotation.yaw - prev.rotation.yaw),
-        roll: prev.rotation.roll + this.smoothingFactor * (current.rotation.roll - prev.rotation.roll),
+        pitch: prev.rotation.pitch + sf * (current.rotation.pitch - prev.rotation.pitch),
+        yaw: prev.rotation.yaw + sf * (current.rotation.yaw - prev.rotation.yaw),
+        roll: prev.rotation.roll + sf * (current.rotation.roll - prev.rotation.roll),
       },
     };
 
@@ -75,18 +114,36 @@ class LandmarkSmoother {
   }
 }
 
-// MediaPipe FaceMesh landmark indices
+// MediaPipe FaceMesh landmark indices - comprehensive set for accurate glasses placement
 const LANDMARKS = {
+  // Eye corners - critical for glasses positioning
   LEFT_EYE_OUTER: 33,
   LEFT_EYE_INNER: 133,
   RIGHT_EYE_OUTER: 263,
   RIGHT_EYE_INNER: 362,
+  
+  // Eye top/bottom for vertical positioning
+  LEFT_EYE_TOP: 159,
+  LEFT_EYE_BOTTOM: 145,
+  RIGHT_EYE_TOP: 386,
+  RIGHT_EYE_BOTTOM: 374,
+  
+  // Nose landmarks for bridge and depth
   NOSE_BRIDGE: 6,
   NOSE_TOP: 168,
+  NOSE_TIP: 4,
+  NOSE_LEFT: 198,
+  NOSE_RIGHT: 420,
+  
+  // Face boundary for scale
   FACE_LEFT: 234,
   FACE_RIGHT: 454,
   FOREHEAD: 10,
   CHIN: 152,
+  
+  // Temples area for glasses arms
+  LEFT_TEMPLE: 127,
+  RIGHT_TEMPLE: 356,
 };
 
 export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTrackingProps) => {
@@ -144,6 +201,20 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
       const width = canvas.width;
       const height = canvas.height;
 
+      // Calculate eye centers
+      const leftEyeCenter = {
+        x: ((faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x + faceLandmarks[LANDMARKS.LEFT_EYE_INNER].x) / 2) * width,
+        y: ((faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].y + faceLandmarks[LANDMARKS.LEFT_EYE_INNER].y) / 2) * height,
+      };
+      const rightEyeCenter = {
+        x: ((faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x + faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x) / 2) * width,
+        y: ((faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].y + faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].y) / 2) * height,
+      };
+
+      // Calculate face depth based on eye distance (normalized)
+      const eyeDist = Math.abs(faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x - faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x);
+      const faceDepth = eyeDist * 1000; // Normalized depth estimate
+
       const rawLandmarks: FaceLandmarks = {
         leftEyeOuter: {
           x: faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x * width,
@@ -161,6 +232,8 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
           x: faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x * width,
           y: faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].y * height,
         },
+        leftEyeCenter,
+        rightEyeCenter,
         noseBridge: {
           x: faceLandmarks[LANDMARKS.NOSE_BRIDGE].x * width,
           y: faceLandmarks[LANDMARKS.NOSE_BRIDGE].y * height,
@@ -169,12 +242,24 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
           x: faceLandmarks[LANDMARKS.NOSE_TOP].x * width,
           y: faceLandmarks[LANDMARKS.NOSE_TOP].y * height,
         },
+        noseTip: {
+          x: faceLandmarks[LANDMARKS.NOSE_TIP].x * width,
+          y: faceLandmarks[LANDMARKS.NOSE_TIP].y * height,
+          z: faceLandmarks[LANDMARKS.NOSE_TIP].z || 0,
+        },
+        leftTemple: {
+          x: faceLandmarks[LANDMARKS.LEFT_TEMPLE].x * width,
+          y: faceLandmarks[LANDMARKS.LEFT_TEMPLE].y * height,
+        },
+        rightTemple: {
+          x: faceLandmarks[LANDMARKS.RIGHT_TEMPLE].x * width,
+          y: faceLandmarks[LANDMARKS.RIGHT_TEMPLE].y * height,
+        },
         faceWidth: Math.abs(
           faceLandmarks[LANDMARKS.FACE_LEFT].x - faceLandmarks[LANDMARKS.FACE_RIGHT].x
         ) * width,
-        eyeDistance: Math.abs(
-          faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x - faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x
-        ) * width,
+        eyeDistance: eyeDist * width,
+        faceDepth,
         rotation: calculateRotation(faceLandmarks),
       };
 

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
-import GlassesOverlay from "@/components/ar/GlassesOverlay";
+import RealisticGlassesOverlay from "@/components/ar/RealisticGlassesOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import { glassesStyles } from "@/data/glassesStyles";
@@ -249,14 +249,13 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
         />
 
-        {/* Glasses Overlay Component */}
-        <GlassesOverlay
+        {/* Realistic Glasses Overlay Component */}
+        <RealisticGlassesOverlay
           landmarks={landmarks}
           canvasRef={canvasRef}
           videoRef={videoRef}
-          selectedGlassesId={selectedGlassesId}
-          imageSource={uploadedImage}
           selectedProduct={selectedProduct}
+          imageSource={uploadedImage}
         />
 
         {/* Face detection indicator */}
