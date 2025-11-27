@@ -200,7 +200,7 @@ const ProductDetail = () => {
         <Button
           variant="ghost"
           onClick={() => navigate("/browse")}
-          className="mb-6 hover-lift"
+          className="mb-6 hover-lift text-primary"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Browse
@@ -208,7 +208,7 @@ const ProductDetail = () => {
 
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-4 animate-fade-in-up">
-            <Card className="overflow-hidden card-premium">
+            <Card className="overflow-hidden rounded-2xl border-accent/20 shadow-card">
               <img
                 src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
                 alt={product.name}
@@ -216,8 +216,8 @@ const ProductDetail = () => {
               />
             </Card>
             <Button 
-              variant="outline" 
-              className="w-full hover-lift" 
+              variant="premium" 
+              className="w-full rounded-xl" 
               size="lg"
               onClick={() => {
                 setShowARTryOn(true);
@@ -231,54 +231,54 @@ const ProductDetail = () => {
 
           <div className="space-y-6 animate-fade-in-up stagger-1">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">{product.name}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2 text-primary">{product.name}</h1>
               <p className="text-xl text-muted-foreground">{product.brand}</p>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <Badge variant="secondary" className="text-base px-3 py-1">
+              <Badge variant="secondary" className="text-base px-3 py-1 rounded-lg bg-accent/10 text-accent border-accent/20">
                 {product.frame_style.split("_").map((word: string) => 
                   word.charAt(0).toUpperCase() + word.slice(1)
                 ).join(" ")}
               </Badge>
-              <Badge variant="outline" className="text-base px-3 py-1">
+              <Badge variant="outline" className="text-base px-3 py-1 rounded-lg border-primary/30">
                 {product.frame_color}
               </Badge>
             </div>
 
-            <p className="text-3xl font-bold text-primary">{formatNaira(product.price)}</p>
+            <p className="text-3xl font-bold text-accent">{formatNaira(product.price)}</p>
 
             {product.description && (
-              <Card className="card-premium">
+              <Card className="rounded-2xl border-accent/10 shadow-card">
                 <CardContent className="pt-6">
-                  <h3 className="font-semibold mb-2">Description</h3>
+                  <h3 className="font-bold mb-2 text-primary">Description</h3>
                   <p className="text-muted-foreground leading-relaxed">{product.description}</p>
                 </CardContent>
               </Card>
             )}
 
-            <Card className="card-premium">
+            <Card className="rounded-2xl border-accent/10 shadow-card">
               <CardContent className="pt-6 space-y-3">
-                <h3 className="font-semibold mb-3">Specifications</h3>
+                <h3 className="font-bold mb-3 text-primary">Specifications</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground">Material</p>
-                    <p className="font-medium capitalize">{product.frame_material}</p>
+                    <p className="font-semibold capitalize text-foreground">{product.frame_material}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Gender</p>
-                    <p className="font-medium capitalize">{product.gender}</p>
+                    <p className="font-semibold capitalize text-foreground">{product.gender}</p>
                   </div>
                   {product.lens_width && (
                     <div>
                       <p className="text-muted-foreground">Lens Width</p>
-                      <p className="font-medium">{product.lens_width}mm</p>
+                      <p className="font-semibold text-foreground">{product.lens_width}mm</p>
                     </div>
                   )}
                   {product.bridge_width && (
                     <div>
                       <p className="text-muted-foreground">Bridge Width</p>
-                      <p className="font-medium">{product.bridge_width}mm</p>
+                      <p className="font-semibold text-foreground">{product.bridge_width}mm</p>
                     </div>
                   )}
                 </div>
@@ -288,15 +288,15 @@ const ProductDetail = () => {
             {/* Prescription Form Collapsible */}
             <Collapsible open={prescriptionOpen} onOpenChange={setPrescriptionOpen}>
               <CollapsibleTrigger asChild>
-                <Button variant="outline" className="w-full justify-between hover-lift">
+                <Button variant="outline" className="w-full justify-between rounded-xl border-primary/30 hover:bg-primary/5">
                   <span className="flex items-center gap-2">
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4 text-accent" />
                     Add Prescription Details
                   </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${prescriptionOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`h-4 w-4 text-accent transition-transform duration-300 ${prescriptionOpen ? "rotate-180" : ""}`} />
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-4">
+              <CollapsibleContent className="pt-4 animate-fade-in">
                 <PrescriptionForm 
                   initialData={prescriptionData}
                   onSave={() => {
@@ -310,7 +310,8 @@ const ProductDetail = () => {
             <div className="flex gap-3">
               <Button 
                 size="lg" 
-                className="flex-1 hover-lift"
+                variant="premium"
+                className="flex-1 rounded-xl"
                 onClick={addToCart}
               >
                 Add to Cart
@@ -319,17 +320,17 @@ const ProductDetail = () => {
                 size="lg"
                 variant="outline"
                 onClick={toggleFavorite}
-                className="hover-lift"
+                className="rounded-xl border-primary/30 hover:bg-primary/5"
               >
-                <Heart className={`h-5 w-5 ${isFavorite ? "fill-primary text-primary" : ""}`} />
+                <Heart className={`h-5 w-5 ${isFavorite ? "fill-accent text-accent" : "text-primary"}`} />
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 onClick={shareProduct}
-                className="hover-lift"
+                className="rounded-xl border-primary/30 hover:bg-primary/5"
               >
-                <Share2 className="h-5 w-5" />
+                <Share2 className="h-5 w-5 text-primary" />
               </Button>
             </div>
           </div>
