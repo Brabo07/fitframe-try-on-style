@@ -5,6 +5,13 @@ import { Tables } from "@/integrations/supabase/types";
 import { getFrameColorHex, getLensColor } from "@/data/glassesStyles";
 import type { FaceLandmarks } from "@/hooks/useFaceTracking";
 
+export interface ARAdjustments {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  verticalTilt: number;
+}
+
 interface Glasses3DOverlayProps {
   faceLandmarks: FaceLandmarks | null;
   canvasWidth: number;
@@ -12,6 +19,7 @@ interface Glasses3DOverlayProps {
   selectedGlassesId?: string;
   selectedProduct?: Tables<"glasses_products"> | null;
   frameStyle?: string;
+  adjustments?: ARAdjustments;
 }
 
 // Smoothing class for stable positioning
@@ -266,7 +274,8 @@ const Scene = ({
   canvasHeight, 
   frameColor, 
   lensColor,
-  frameStyle 
+  frameStyle,
+  adjustments
 }: { 
   faceLandmarks: FaceLandmarks | null;
   canvasWidth: number;
@@ -274,6 +283,7 @@ const Scene = ({
   frameColor: string;
   lensColor: string;
   frameStyle: string;
+  adjustments?: ARAdjustments;
 }) => {
   const { camera } = useThree();
   const smootherRef = useRef(new TransformSmoother());
@@ -299,17 +309,23 @@ const Scene = ({
     // Eye distance for scaling
     const eyeDistance = faceLandmarks.eyeDistance;
 
+    // Get adjustment values (with defaults)
+    const offsetX = adjustments?.offsetX ?? 0;
+    const offsetY = adjustments?.offsetY ?? 0;
+    const scaleMultiplier = adjustments?.scale ?? 1;
+    const tiltDeg = adjustments?.verticalTilt ?? 0;
+
     // Convert screen coordinates to 3D world coordinates
     // Map screen space to normalized device coordinates
-    const normalizedX = ((centerX / canvasWidth) - 0.5) * 4.2;
-    const normalizedY = -((centerY / canvasHeight) - 0.5) * 3.2;
+    const normalizedX = ((centerX / canvasWidth) - 0.5) * 4.2 + offsetX;
+    const normalizedY = -((centerY / canvasHeight) - 0.5) * 3.2 + offsetY;
     
     // Scale based on eye distance with better calibration
-    const baseScale = (eyeDistance / canvasWidth) * 13;
+    const baseScale = (eyeDistance / canvasWidth) * 13 * scaleMultiplier;
     
     // Calculate rotation from face landmarks (with dampening)
     const yaw = (faceLandmarks.rotation.yaw || 0) * 0.012;
-    const pitch = (faceLandmarks.rotation.pitch || 0) * 0.008;
+    const pitch = (faceLandmarks.rotation.pitch || 0) * 0.008 + (tiltDeg * Math.PI / 180);
     const roll = (faceLandmarks.rotation.roll || 0) * (Math.PI / 180);
 
     // Calculate depth based on face size
@@ -321,7 +337,7 @@ const Scene = ({
       new THREE.Euler(pitch, yaw, roll),
       baseScale
     );
-  }, [faceLandmarks, canvasWidth, canvasHeight]);
+  }, [faceLandmarks, canvasWidth, canvasHeight, adjustments]);
 
   if (!isReady || !faceLandmarks) return null;
 
@@ -351,7 +367,8 @@ const Glasses3DOverlay = ({
   canvasHeight,
   selectedGlassesId,
   selectedProduct,
-  frameStyle = "wayfarer"
+  frameStyle = "wayfarer",
+  adjustments
 }: Glasses3DOverlayProps) => {
   // Determine frame and lens colors
   const frameColor = selectedProduct 
@@ -391,6 +408,7 @@ const Glasses3DOverlay = ({
           frameColor={frameColor}
           lensColor={lensColor}
           frameStyle={actualFrameStyle}
+          adjustments={adjustments}
         />
       </Canvas>
     </div>
