@@ -1,221 +1,323 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, X, RotateCw, Download, Share2 } from "lucide-react";
+import { Camera, X, RotateCw, Download, Share2, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useFaceTracking } from "@/hooks/useFaceTracking";
+import GlassesOverlay from "@/components/ar/GlassesOverlay";
+import GlassesCarousel from "@/components/ar/GlassesCarousel";
+import { glassesStyles } from "@/data/glassesStyles";
 
 interface ARTryOnProps {
-  product: any;
+  product?: any;
   onClose: () => void;
 }
 
 const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [cameraActive, setCameraActive] = useState(false);
+  const [mode, setMode] = useState<"camera" | "photo">("camera");
+  const [selectedGlassesId, setSelectedGlassesId] = useState(
+    product?.frame_style ? `${product.frame_style}-${product.frame_color?.toLowerCase()}` : glassesStyles[0].id
+  );
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(null);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
+  const { landmarks, isLoading, error, fps } = useFaceTracking({
+    videoRef,
+    canvasRef,
+    isActive: mode === "camera" && !capturedImage,
+  });
+
+  const capturePhoto = useCallback(() => {
+    if (!canvasRef.current) return;
+    const imageData = canvasRef.current.toDataURL("image/png");
+    setCapturedImage(imageData);
+    toast.success("Photo captured!");
   }, []);
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 1280, height: 720 },
-        audio: false,
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play();
-          setCameraActive(true);
-          setIsLoading(false);
-        };
-      }
-    } catch (error) {
-      console.error("Error accessing camera:", error);
-      toast.error("Unable to access camera. Please check permissions.");
-      setIsLoading(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0);
-        const imageData = canvas.toDataURL("image/png");
-        setCapturedImage(imageData);
-        toast.success("Photo captured!");
-      }
-    }
-  };
-
-  const retakePhoto = () => {
+  const retakePhoto = useCallback(() => {
     setCapturedImage(null);
-  };
+    setUploadedImage(null);
+  }, []);
 
-  const downloadPhoto = () => {
-    if (capturedImage) {
-      const link = document.createElement("a");
-      link.href = capturedImage;
-      link.download = `fitframe-${product.name}-tryon.png`;
-      link.click();
-      toast.success("Photo downloaded!");
-    }
-  };
+  const downloadPhoto = useCallback(() => {
+    if (!capturedImage && !canvasRef.current) return;
+    
+    const imageData = capturedImage || canvasRef.current?.toDataURL("image/png");
+    if (!imageData) return;
+
+    const link = document.createElement("a");
+    link.href = imageData;
+    link.download = `fitframe-tryon-${Date.now()}.png`;
+    link.click();
+    toast.success("Photo downloaded!");
+  }, [capturedImage]);
 
   const sharePhoto = async () => {
-    if (capturedImage) {
-      try {
-        const blob = await (await fetch(capturedImage)).blob();
-        const file = new File([blob], `fitframe-${product.name}.png`, { type: "image/png" });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: "FitFrame Virtual Try-On",
-            text: `Check out how I look in ${product.brand} ${product.name}!`,
-          });
-          toast.success("Shared successfully!");
-        } else {
-          // Fallback: copy image to clipboard
-          toast.info("Sharing not available. Photo ready to download!");
-        }
-      } catch (error) {
-        console.error("Error sharing:", error);
-        toast.error("Unable to share. Try downloading instead.");
+    const imageData = capturedImage || canvasRef.current?.toDataURL("image/png");
+    if (!imageData) return;
+
+    try {
+      const blob = await (await fetch(imageData)).blob();
+      const file = new File([blob], `fitframe-tryon.png`, { type: "image/png" });
+      
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "FitFrame Virtual Try-On",
+          text: "Check out my virtual try-on!",
+        });
+        toast.success("Shared successfully!");
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.info("Link copied to clipboard!");
       }
+    } catch (err) {
+      console.error("Error sharing:", err);
+      toast.error("Unable to share. Try downloading instead.");
     }
   };
 
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = () => {
+      setUploadedImage(img);
+      setMode("photo");
+      
+      // Update canvas size to match image
+      if (canvasRef.current) {
+        const maxWidth = 1280;
+        const maxHeight = 720;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = (maxHeight / height) * width;
+          height = maxHeight;
+        }
+
+        canvasRef.current.width = width;
+        canvasRef.current.height = height;
+      }
+    };
+    img.src = URL.createObjectURL(file);
+    toast.success("Photo uploaded! Face tracking will analyze the image.");
+  }, []);
+
+  const switchToCamera = useCallback(() => {
+    setUploadedImage(null);
+    setCapturedImage(null);
+    setMode("camera");
+    
+    if (canvasRef.current) {
+      canvasRef.current.width = 1280;
+      canvasRef.current.height = 720;
+    }
+  }, []);
+
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center animate-fade-in">
-      <div className="relative w-full h-full max-w-4xl max-h-[90vh] bg-card rounded-lg overflow-hidden shadow-elegant">
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/70 to-transparent p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-white">
-              <h2 className="text-xl font-semibold">{product.brand}</h2>
-              <p className="text-sm text-white/80">{product.name}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="text-white hover:bg-white/20"
-            >
-              <X className="h-6 w-6" />
-            </Button>
-          </div>
+    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="text-white">
+          <h2 className="text-xl font-semibold">Virtual Try-On</h2>
+          <p className="text-sm text-white/70">
+            {mode === "camera" ? "Move your head to see different angles" : "Photo mode"}
+          </p>
         </div>
-
-        {/* Camera View */}
-        <div className="relative w-full h-full flex items-center justify-center bg-black">
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-white">
-                <Camera className="h-16 w-16 animate-pulse mx-auto mb-4" />
-                <p>Initializing camera...</p>
-              </div>
+        <div className="flex items-center gap-3">
+          {mode === "camera" && !capturedImage && (
+            <div className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded">
+              {fps} FPS
             </div>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-white hover:bg-white/20"
+          >
+            <X className="h-6 w-6" />
+          </Button>
+        </div>
+      </div>
 
-          {cameraActive && !capturedImage && (
-            <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              
-              {/* Frame Overlay Simulation */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="relative" style={{ width: "60%", maxWidth: "400px" }}>
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="opacity-60 mix-blend-multiply"
-                    style={{
-                      filter: "brightness(1.2) contrast(1.1)",
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+      {/* Main Content */}
+      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+        {isLoading && mode === "camera" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+            <div className="text-center text-white">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3" />
+              <p className="text-lg">Loading face tracking...</p>
+              <p className="text-sm text-white/60">This may take a moment</p>
+            </div>
+          </div>
+        )}
 
-          {capturedImage && (
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+            <div className="text-center text-white p-6 bg-destructive/20 rounded-lg max-w-md">
+              <Camera className="h-12 w-12 mx-auto mb-3 text-destructive" />
+              <p className="text-lg font-medium mb-2">Camera Error</p>
+              <p className="text-sm text-white/80">{error}</p>
+              <Button
+                variant="secondary"
+                className="mt-4"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Photo Instead
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Video element (hidden, used for MediaPipe) */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="hidden"
+        />
+
+        {/* Canvas for rendering */}
+        <canvas
+          ref={canvasRef}
+          width={1280}
+          height={720}
+          className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
+        />
+
+        {/* Glasses Overlay Component */}
+        <GlassesOverlay
+          landmarks={landmarks}
+          canvasRef={canvasRef}
+          videoRef={videoRef}
+          selectedGlassesId={selectedGlassesId}
+          imageSource={uploadedImage}
+        />
+
+        {/* Face detection indicator */}
+        {mode === "camera" && !isLoading && !error && (
+          <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
+            landmarks ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
+          }`}>
+            {landmarks ? "✓ Face detected" : "○ Looking for face..."}
+          </div>
+        )}
+
+        {/* Captured image overlay */}
+        {capturedImage && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/90">
             <img
               src={capturedImage}
               alt="Captured"
-              className="w-full h-full object-cover"
+              className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
             />
-          )}
+          </div>
+        )}
+      </div>
 
-          <canvas ref={canvasRef} className="hidden" />
-        </div>
+      {/* Glasses Carousel */}
+      <div className="bg-gradient-to-t from-black/90 to-black/60 pt-4 pb-2">
+        <GlassesCarousel
+          selectedId={selectedGlassesId}
+          onSelect={setSelectedGlassesId}
+        />
+      </div>
 
-        {/* Controls */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent p-6">
-          <div className="flex items-center justify-center gap-4">
-            {!capturedImage ? (
-              <>
+      {/* Controls */}
+      <div className="bg-black/90 p-4 safe-area-inset-bottom">
+        <div className="flex items-center justify-center gap-3">
+          {!capturedImage ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload
+              </Button>
+              
+              {mode === "camera" && (
                 <Button
                   onClick={capturePhoto}
                   size="lg"
                   className="rounded-full h-16 w-16 bg-primary hover:bg-primary-hover shadow-elegant"
-                  disabled={!cameraActive}
+                  disabled={!landmarks}
                 >
                   <Camera className="h-6 w-6" />
                 </Button>
-              </>
-            ) : (
-              <>
+              )}
+
+              {mode === "photo" && uploadedImage && (
                 <Button
-                  onClick={retakePhoto}
                   variant="secondary"
+                  onClick={switchToCamera}
                   className="gap-2"
                 >
-                  <RotateCw className="h-4 w-4" />
-                  Retake
+                  <Camera className="h-4 w-4" />
+                  Use Camera
                 </Button>
-                <Button
-                  onClick={downloadPhoto}
-                  variant="secondary"
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Download
-                </Button>
-                <Button
-                  onClick={sharePhoto}
-                  className="gap-2"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </Button>
-              </>
-            )}
-          </div>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={downloadPhoto}
+                className="gap-2"
+                disabled={!landmarks && mode === "camera"}
+              >
+                <Download className="h-4 w-4" />
+                Save
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={retakePhoto}
+                variant="secondary"
+                className="gap-2"
+              >
+                <RotateCw className="h-4 w-4" />
+                Retake
+              </Button>
+              <Button
+                onClick={downloadPhoto}
+                variant="secondary"
+                className="gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </Button>
+              <Button
+                onClick={sharePhoto}
+                className="gap-2"
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </Button>
+            </>
+          )}
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
       </div>
     </div>
   );

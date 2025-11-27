@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Glasses, Heart, User, LogOut, Menu, X, ShoppingCart, Settings } from "lucide-react";
+import { Glasses, Heart, User, LogOut, Menu, X, ShoppingCart, Settings, Camera } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -64,11 +64,18 @@ const Header = () => {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6">
+          <Link to="/browse" className="text-sm font-medium hover:text-primary transition-colors">
+            Browse
+          </Link>
+          <Link to="/try-on" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+            <Camera className="h-4 w-4" />
+            Try-On
+          </Link>
+          <Link to="/catalog" className="text-sm font-medium hover:text-primary transition-colors">
+            Catalog
+          </Link>
           {user ? (
             <>
-              <Link to="/browse" className="text-sm font-medium hover:text-primary transition-colors">
-                Browse
-              </Link>
               <Link to="/favorites" className="text-sm font-medium hover:text-primary transition-colors">
                 <Heart className="h-5 w-5" />
               </Link>
@@ -134,15 +141,29 @@ const Header = () => {
       {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-background p-4 space-y-3">
+          <Link
+            to="/browse"
+            className="block py-2 text-sm font-medium hover:text-primary transition-colors"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Browse
+          </Link>
+          <Link
+            to="/try-on"
+            className="block py-2 text-sm font-medium hover:text-primary transition-colors"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Virtual Try-On
+          </Link>
+          <Link
+            to="/catalog"
+            className="block py-2 text-sm font-medium hover:text-primary transition-colors"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Catalog
+          </Link>
           {user ? (
             <>
-              <Link
-                to="/browse"
-                className="block py-2 text-sm font-medium hover:text-primary transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Browse
-              </Link>
               <Link
                 to="/favorites"
                 className="block py-2 text-sm font-medium hover:text-primary transition-colors"
