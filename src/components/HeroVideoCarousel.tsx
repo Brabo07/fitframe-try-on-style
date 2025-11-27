@@ -1,44 +1,57 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Play, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 
+// Real videos of people wearing glasses from Pexels
 const videos = [
   {
     id: 1,
-    url: "https://videos.pexels.com/video-files/5699838/5699838-hd_1080_1920_25fps.mp4",
-    title: "Modern Aviators",
-    subtitle: "Classic style meets modern design"
+    url: "https://videos.pexels.com/video-files/5537587/5537587-hd_1920_1080_30fps.mp4",
+    poster: "https://images.pexels.com/videos/5537587/pexels-photo-5537587.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    title: "Professional Style",
+    subtitle: "Sophisticated frames for every occasion"
   },
   {
     id: 2,
-    url: "https://videos.pexels.com/video-files/4429122/4429122-hd_1080_1920_25fps.mp4",
-    title: "Bold Frames",
-    subtitle: "Make a statement"
+    url: "https://videos.pexels.com/video-files/4429122/4429122-hd_1920_1080_25fps.mp4",
+    poster: "https://images.pexels.com/videos/4429122/pexels-photo-4429122.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    title: "Bold & Confident",
+    subtitle: "Make a statement with your look"
   },
   {
     id: 3,
-    url: "https://videos.pexels.com/video-files/4429134/4429134-hd_1080_1920_25fps.mp4",
-    title: "Elegant Cat-Eye",
-    subtitle: "Timeless sophistication"
+    url: "https://videos.pexels.com/video-files/5699838/5699838-hd_1920_1080_25fps.mp4",
+    poster: "https://images.pexels.com/videos/5699838/pexels-photo-5699838.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    title: "Casual Elegance",
+    subtitle: "Everyday frames with premium quality"
   },
   {
     id: 4,
-    url: "https://videos.pexels.com/video-files/5537587/5537587-hd_1280_720_30fps.mp4",
-    title: "Minimalist Round",
-    subtitle: "Simple yet stunning"
+    url: "https://videos.pexels.com/video-files/6567846/6567846-hd_1920_1080_30fps.mp4",
+    poster: "https://images.pexels.com/videos/6567846/pexels-photo-6567846.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    title: "Modern Classic",
+    subtitle: "Timeless designs reimagined"
+  },
+  {
+    id: 5,
+    url: "https://videos.pexels.com/video-files/5538999/5538999-hd_1920_1080_30fps.mp4",
+    poster: "https://images.pexels.com/videos/5538999/pexels-photo-5538999.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    title: "Urban Style",
+    subtitle: "Street-ready eyewear"
   }
 ];
 
 const HeroVideoCarousel = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
+  const [isLoaded, setIsLoaded] = useState<boolean[]>(new Array(videos.length).fill(false));
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % videos.length);
-    }, 6000);
+    }, 8000);
 
     return () => clearInterval(timer);
   }, []);
@@ -64,8 +77,16 @@ const HeroVideoCarousel = () => {
     setCurrentIndex((prev) => (prev + 1) % videos.length);
   };
 
+  const handleVideoLoad = (index: number) => {
+    setIsLoaded(prev => {
+      const newLoaded = [...prev];
+      newLoaded[index] = true;
+      return newLoaded;
+    });
+  };
+
   return (
-    <section className="relative h-screen w-full overflow-hidden">
+    <section className="relative h-screen w-full overflow-hidden bg-background">
       {/* Video slides */}
       {videos.map((video, index) => (
         <div
@@ -74,16 +95,30 @@ const HeroVideoCarousel = () => {
             index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
           }`}
         >
+          {/* Poster image while loading */}
+          {!isLoaded[index] && (
+            <img
+              src={video.poster}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          )}
+          
           <video
             ref={(el) => (videoRefs.current[index] = el)}
             className="h-full w-full object-cover"
             src={video.url}
+            poster={video.poster}
             muted={isMuted}
             loop
             playsInline
             autoPlay={index === 0}
+            onLoadedData={() => handleVideoLoad(index)}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
+          
+          {/* Gradient overlays for better text readability */}
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/60" />
         </div>
       ))}
 
@@ -91,30 +126,33 @@ const HeroVideoCarousel = () => {
       <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-4">
         <div className="text-center max-w-4xl mx-auto">
           <h1 
-            key={currentIndex}
-            className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-4 animate-fade-in-up"
+            key={`title-${currentIndex}`}
+            className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-4 animate-fade-in-up drop-shadow-lg"
           >
             Try On Stylish Frames Instantly
           </h1>
           <p 
-            className="text-lg md:text-xl lg:text-2xl text-muted-foreground mb-8 animate-fade-in-up stagger-1"
+            className="text-lg md:text-xl lg:text-2xl text-foreground/90 mb-8 animate-fade-in-up stagger-1 drop-shadow-md"
           >
             Explore frames through real videos and motion previews
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up stagger-2">
-            <Button asChild size="lg" className="text-base px-8 hover:scale-105 transition-all">
+            <Button asChild size="lg" className="text-base px-8 hover:scale-105 transition-all shadow-elevated">
               <Link to="/try-on">Start Virtual Try-On</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="bg-background/20 backdrop-blur-sm border-2 hover:bg-background/40 hover:scale-105 transition-all text-base px-8">
+            <Button asChild size="lg" variant="outline" className="bg-background/30 backdrop-blur-sm border-2 hover:bg-background/50 hover:scale-105 transition-all text-base px-8">
               <Link to="/browse">Browse Collection</Link>
             </Button>
           </div>
         </div>
 
         {/* Current video info */}
-        <div className="absolute bottom-32 left-4 md:left-8 text-left animate-slide-in-left">
-          <p className="text-sm text-muted-foreground mb-1">{videos[currentIndex].subtitle}</p>
-          <h3 className="text-xl md:text-2xl font-semibold text-foreground">{videos[currentIndex].title}</h3>
+        <div 
+          key={`info-${currentIndex}`}
+          className="absolute bottom-32 left-4 md:left-8 text-left animate-slide-in-left"
+        >
+          <p className="text-sm text-foreground/70 mb-1 drop-shadow">{videos[currentIndex].subtitle}</p>
+          <h3 className="text-xl md:text-2xl font-semibold text-foreground drop-shadow-lg">{videos[currentIndex].title}</h3>
         </div>
       </div>
 
@@ -122,7 +160,7 @@ const HeroVideoCarousel = () => {
       <div className="absolute bottom-8 left-0 right-0 z-30 flex items-center justify-center gap-4">
         <button
           onClick={goToPrevious}
-          className="p-3 rounded-full bg-background/20 backdrop-blur-sm hover:bg-background/40 transition-all"
+          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110"
           aria-label="Previous video"
         >
           <ChevronLeft className="h-5 w-5 text-foreground" />
@@ -136,7 +174,7 @@ const HeroVideoCarousel = () => {
               onClick={() => setCurrentIndex(index)}
               className={`h-2 transition-all duration-300 rounded-full ${
                 index === currentIndex 
-                  ? "w-8 bg-primary" 
+                  ? "w-8 bg-primary shadow-lg" 
                   : "w-2 bg-foreground/30 hover:bg-foreground/50"
               }`}
               aria-label={`Go to video ${index + 1}`}
@@ -146,7 +184,7 @@ const HeroVideoCarousel = () => {
 
         <button
           onClick={goToNext}
-          className="p-3 rounded-full bg-background/20 backdrop-blur-sm hover:bg-background/40 transition-all"
+          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110"
           aria-label="Next video"
         >
           <ChevronRight className="h-5 w-5 text-foreground" />
@@ -155,7 +193,7 @@ const HeroVideoCarousel = () => {
         {/* Mute toggle */}
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className="p-3 rounded-full bg-background/20 backdrop-blur-sm hover:bg-background/40 transition-all ml-4"
+          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110 ml-4"
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? (
@@ -164,6 +202,13 @@ const HeroVideoCarousel = () => {
             <Volume2 className="h-5 w-5 text-foreground" />
           )}
         </button>
+      </div>
+
+      {/* Video title badges */}
+      <div className="absolute top-24 right-4 md:right-8 z-30">
+        <div className="bg-primary/90 backdrop-blur-sm text-primary-foreground px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-fade-in">
+          {currentIndex + 1} / {videos.length}
+        </div>
       </div>
     </section>
   );
