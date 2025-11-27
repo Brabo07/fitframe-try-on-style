@@ -1,14 +1,15 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart } from "lucide-react";
+import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart, Box, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
 import RealisticGlassesOverlay from "@/components/ar/RealisticGlassesOverlay";
+import Glasses3DOverlay from "@/components/ar/Glasses3DOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { formatNaira } from "@/utils/formatCurrency";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface ARTryOnProps {
@@ -18,8 +19,8 @@ interface ARTryOnProps {
 }
 
 const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => {
-  const navigate = useNavigate();
   const [mode, setMode] = useState<"camera" | "photo">("camera");
+  const [renderMode, setRenderMode] = useState<"3d" | "2d">("3d");
   const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(
     product || null
   );
@@ -98,7 +99,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
       setUploadedImage(img);
       setMode("photo");
       
-      // Update canvas size to match image
       if (canvasRef.current) {
         const maxWidth = 1280;
         const maxHeight = 720;
@@ -175,6 +175,9 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     setSelectedGlassesId(`${product.frame_style}-${product.frame_color.toLowerCase()}`);
   };
 
+  const canvasWidth = canvasRef.current?.width || 1280;
+  const canvasHeight = canvasRef.current?.height || 720;
+
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in">
       {/* Header */}
@@ -186,6 +189,32 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Render mode toggle */}
+          <div className="flex items-center bg-white/10 rounded-full p-1">
+            <button
+              onClick={() => setRenderMode("3d")}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                renderMode === "3d" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              <Box className="h-3 w-3 inline mr-1" />
+              3D
+            </button>
+            <button
+              onClick={() => setRenderMode("2d")}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                renderMode === "2d" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "text-white/70 hover:text-white"
+              }`}
+            >
+              <Layers className="h-3 w-3 inline mr-1" />
+              2D
+            </button>
+          </div>
+          
           {mode === "camera" && !capturedImage && (
             <div className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded">
               {fps} FPS
@@ -205,7 +234,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
       {/* Main Content */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
         {isLoading && mode === "camera" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
             <div className="text-center text-white">
               <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3" />
               <p className="text-lg">Loading face tracking...</p>
@@ -215,7 +244,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         )}
 
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
             <div className="text-center text-white p-6 bg-destructive/20 rounded-lg max-w-md">
               <Camera className="h-12 w-12 mx-auto mb-3 text-destructive" />
               <p className="text-lg font-medium mb-2">Camera Error</p>
@@ -241,22 +270,35 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           className="hidden"
         />
 
-        {/* Canvas for rendering */}
-        <canvas
-          ref={canvasRef}
-          width={1280}
-          height={720}
-          className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
-        />
+        {/* Canvas container with relative positioning for 3D overlay */}
+        <div className="relative">
+          {/* Canvas for video/photo rendering */}
+          <canvas
+            ref={canvasRef}
+            width={1280}
+            height={720}
+            className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
+          />
 
-        {/* Realistic Glasses Overlay Component */}
-        <RealisticGlassesOverlay
-          landmarks={landmarks}
-          canvasRef={canvasRef}
-          videoRef={videoRef}
-          selectedProduct={selectedProduct}
-          imageSource={uploadedImage}
-        />
+          {/* 3D or 2D Glasses Overlay */}
+          {renderMode === "3d" && landmarks ? (
+            <Glasses3DOverlay
+              faceLandmarks={landmarks}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              selectedProduct={selectedProduct}
+              frameStyle={selectedProduct?.frame_style || "wayfarer"}
+            />
+          ) : (
+            <RealisticGlassesOverlay
+              landmarks={landmarks}
+              canvasRef={canvasRef}
+              videoRef={videoRef}
+              selectedProduct={selectedProduct}
+              imageSource={uploadedImage}
+            />
+          )}
+        </div>
 
         {/* Face detection indicator */}
         {mode === "camera" && !isLoading && !error && (
@@ -270,7 +312,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         {/* Selected product price tag */}
         {selectedProduct && (
           <div className="absolute top-4 right-4 bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full text-sm font-bold">
-            ${selectedProduct.price}
+            {formatNaira(selectedProduct.price)}
           </div>
         )}
 
@@ -286,7 +328,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         )}
       </div>
 
-      {/* Glasses Carousel - Use real products or demo glasses */}
+      {/* Glasses Carousel */}
       <div className="bg-gradient-to-t from-black/90 to-black/60 pt-4 pb-2">
         {useRealProducts ? (
           <ProductGlassesCarousel
@@ -304,7 +346,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
 
       {/* Controls */}
       <div className="bg-black/90 p-4 safe-area-inset-bottom">
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           {!capturedImage ? (
             <>
               <Button
