@@ -2,13 +2,16 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
+import PrescriptionForm from "@/components/PrescriptionForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Camera, Loader2, ArrowLeft, Share2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Heart, Camera, Loader2, ArrowLeft, Share2, ChevronDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 import ARTryOn from "@/components/ARTryOn";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { formatNaira } from "@/utils/formatCurrency";
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -19,6 +22,8 @@ const ProductDetail = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showARTryOn, setShowARTryOn] = useState(false);
+  const [prescriptionOpen, setPrescriptionOpen] = useState(false);
+  const [prescriptionData, setPrescriptionData] = useState<any>(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -43,6 +48,27 @@ const ProductDetail = () => {
             .eq("product_id", id)
             .single();
           setIsFavorite(!!favData);
+
+          // Fetch user's prescription data
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("prescription_sph_left, prescription_sph_right, prescription_cyl_left, prescription_cyl_right, prescription_axis_left, prescription_axis_right, prescription_add, prescription_pd, prescription_image_url")
+            .eq("user_id", user.id)
+            .single();
+
+          if (profileData) {
+            setPrescriptionData({
+              sphLeft: profileData.prescription_sph_left,
+              sphRight: profileData.prescription_sph_right,
+              cylLeft: profileData.prescription_cyl_left,
+              cylRight: profileData.prescription_cyl_right,
+              axisLeft: profileData.prescription_axis_left,
+              axisRight: profileData.prescription_axis_right,
+              add: profileData.prescription_add,
+              pd: profileData.prescription_pd,
+              imageUrl: profileData.prescription_image_url
+            });
+          }
         }
 
         // Track product view
@@ -100,7 +126,6 @@ const ProductDetail = () => {
     }
 
     try {
-      // Check if item already in cart
       const { data: existing } = await supabase
         .from("cart_items")
         .select("id, quantity")
@@ -109,13 +134,11 @@ const ProductDetail = () => {
         .maybeSingle();
 
       if (existing) {
-        // Update quantity
         await supabase
           .from("cart_items")
           .update({ quantity: existing.quantity + 1 })
           .eq("id", existing.id);
       } else {
-        // Add new item
         await supabase
           .from("cart_items")
           .insert({ user_id: user.id, product_id: id, quantity: 1 });
@@ -177,15 +200,15 @@ const ProductDetail = () => {
         <Button
           variant="ghost"
           onClick={() => navigate("/browse")}
-          className="mb-6"
+          className="mb-6 hover-lift"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Browse
         </Button>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="space-y-4">
-            <Card className="overflow-hidden">
+        <div className="grid lg:grid-cols-2 gap-8">
+          <div className="space-y-4 animate-fade-in-up">
+            <Card className="overflow-hidden card-premium">
               <img
                 src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
                 alt={product.name}
@@ -194,7 +217,7 @@ const ProductDetail = () => {
             </Card>
             <Button 
               variant="outline" 
-              className="w-full" 
+              className="w-full hover-lift" 
               size="lg"
               onClick={() => {
                 setShowARTryOn(true);
@@ -206,13 +229,13 @@ const ProductDetail = () => {
             </Button>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 animate-fade-in-up stagger-1">
             <div>
-              <h1 className="text-4xl font-bold mb-2">{product.name}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2">{product.name}</h1>
               <p className="text-xl text-muted-foreground">{product.brand}</p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Badge variant="secondary" className="text-base px-3 py-1">
                 {product.frame_style.split("_").map((word: string) => 
                   word.charAt(0).toUpperCase() + word.slice(1)
@@ -223,24 +246,24 @@ const ProductDetail = () => {
               </Badge>
             </div>
 
-            <p className="text-3xl font-bold text-primary">${product.price}</p>
+            <p className="text-3xl font-bold text-primary">{formatNaira(product.price)}</p>
 
             {product.description && (
-              <Card>
+              <Card className="card-premium">
                 <CardContent className="pt-6">
                   <h3 className="font-semibold mb-2">Description</h3>
-                  <p className="text-muted-foreground">{product.description}</p>
+                  <p className="text-muted-foreground leading-relaxed">{product.description}</p>
                 </CardContent>
               </Card>
             )}
 
-            <Card>
+            <Card className="card-premium">
               <CardContent className="pt-6 space-y-3">
                 <h3 className="font-semibold mb-3">Specifications</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground">Material</p>
-                    <p className="font-medium">{product.frame_material}</p>
+                    <p className="font-medium capitalize">{product.frame_material}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Gender</p>
@@ -262,10 +285,32 @@ const ProductDetail = () => {
               </CardContent>
             </Card>
 
+            {/* Prescription Form Collapsible */}
+            <Collapsible open={prescriptionOpen} onOpenChange={setPrescriptionOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" className="w-full justify-between hover-lift">
+                  <span className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    Add Prescription Details
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${prescriptionOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <PrescriptionForm 
+                  initialData={prescriptionData}
+                  onSave={() => {
+                    toast.success("Prescription saved!");
+                    setPrescriptionOpen(false);
+                  }}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
             <div className="flex gap-3">
               <Button 
                 size="lg" 
-                className="flex-1 transition-all hover:scale-105"
+                className="flex-1 hover-lift"
                 onClick={addToCart}
               >
                 Add to Cart
@@ -274,7 +319,7 @@ const ProductDetail = () => {
                 size="lg"
                 variant="outline"
                 onClick={toggleFavorite}
-                className="transition-all hover:scale-105"
+                className="hover-lift"
               >
                 <Heart className={`h-5 w-5 ${isFavorite ? "fill-primary text-primary" : ""}`} />
               </Button>
@@ -282,7 +327,7 @@ const ProductDetail = () => {
                 size="lg"
                 variant="outline"
                 onClick={shareProduct}
-                className="transition-all hover:scale-105"
+                className="hover-lift"
               >
                 <Share2 className="h-5 w-5" />
               </Button>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Glasses, Heart, User, LogOut, Menu, X, ShoppingCart, Settings, Camera } from "lucide-react";
+import { Glasses, Heart, User, LogOut, Menu, X, ShoppingCart, Settings, Camera, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -70,6 +70,10 @@ const Header = () => {
           <Link to="/try-on" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
             <Camera className="h-4 w-4" />
             Try-On
+          </Link>
+          <Link to="/face-analysis" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
+            <Sparkles className="h-4 w-4" />
+            Face Analysis
           </Link>
           <Link to="/catalog" className="text-sm font-medium hover:text-primary transition-colors">
             Catalog
@@ -140,7 +144,7 @@ const Header = () => {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-border bg-background p-4 space-y-3">
+        <div className="md:hidden border-t border-border bg-background p-4 space-y-3 animate-fade-in">
           <Link
             to="/browse"
             className="block py-2 text-sm font-medium hover:text-primary transition-colors"
@@ -154,6 +158,13 @@ const Header = () => {
             onClick={() => setMobileMenuOpen(false)}
           >
             Virtual Try-On
+          </Link>
+          <Link
+            to="/face-analysis"
+            className="block py-2 text-sm font-medium hover:text-primary transition-colors"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Face Analysis
           </Link>
           <Link
             to="/catalog"

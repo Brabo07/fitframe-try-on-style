@@ -221,6 +221,16 @@ export type Database = {
           onboarding_completed: boolean | null
           preferred_colors: string[] | null
           preferred_styles: Database["public"]["Enums"]["frame_style"][] | null
+          prescription_add: number | null
+          prescription_axis_left: number | null
+          prescription_axis_right: number | null
+          prescription_cyl_left: number | null
+          prescription_cyl_right: number | null
+          prescription_image_url: string | null
+          prescription_pd: number | null
+          prescription_sph_left: number | null
+          prescription_sph_right: number | null
+          tutorial_completed: boolean | null
           updated_at: string | null
           user_id: string
           vision_prescription: string | null
@@ -237,6 +247,16 @@ export type Database = {
           onboarding_completed?: boolean | null
           preferred_colors?: string[] | null
           preferred_styles?: Database["public"]["Enums"]["frame_style"][] | null
+          prescription_add?: number | null
+          prescription_axis_left?: number | null
+          prescription_axis_right?: number | null
+          prescription_cyl_left?: number | null
+          prescription_cyl_right?: number | null
+          prescription_image_url?: string | null
+          prescription_pd?: number | null
+          prescription_sph_left?: number | null
+          prescription_sph_right?: number | null
+          tutorial_completed?: boolean | null
           updated_at?: string | null
           user_id: string
           vision_prescription?: string | null
@@ -253,6 +273,16 @@ export type Database = {
           onboarding_completed?: boolean | null
           preferred_colors?: string[] | null
           preferred_styles?: Database["public"]["Enums"]["frame_style"][] | null
+          prescription_add?: number | null
+          prescription_axis_left?: number | null
+          prescription_axis_right?: number | null
+          prescription_cyl_left?: number | null
+          prescription_cyl_right?: number | null
+          prescription_image_url?: string | null
+          prescription_pd?: number | null
+          prescription_sph_left?: number | null
+          prescription_sph_right?: number | null
+          tutorial_completed?: boolean | null
           updated_at?: string | null
           user_id?: string
           vision_prescription?: string | null
