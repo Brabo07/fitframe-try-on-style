@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Camera, Upload, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
+import { formatNaira } from "@/utils/formatCurrency";
 
 import { Database } from "@/integrations/supabase/types";
 
@@ -103,8 +104,6 @@ const FaceShapeAnalysis = () => {
       setAnalyzing(false);
     }
   };
-
-  const { formatNaira } = require("@/utils/formatCurrency");
 
   return (
     <div className="min-h-screen bg-background">
