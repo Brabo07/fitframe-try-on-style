@@ -90,28 +90,30 @@ const GlassesModel = ({
     }
   });
   
-  // Create frame material with better appearance
+  // Create frame material with better appearance (metallic for thin_metal)
   const frameMaterial = useMemo(() => 
     new THREE.MeshStandardMaterial({
       color: new THREE.Color(frameColor),
-      metalness: 0.4,
-      roughness: 0.3,
-      envMapIntensity: 0.5,
-    }), [frameColor]
+      metalness: frameStyle === 'thin_metal' ? 0.9 : 0.4,
+      roughness: frameStyle === 'thin_metal' ? 0.1 : 0.3,
+      envMapIntensity: frameStyle === 'thin_metal' ? 1.0 : 0.5,
+    }), [frameColor, frameStyle]
   );
 
-  // Create lens material with realistic transparency
+  // Create lens material with realistic transparency (no white background)
   const lensMaterial = useMemo(() => {
     const color = new THREE.Color(lensColor);
     return new THREE.MeshPhysicalMaterial({
       color,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.25,
       metalness: 0.0,
-      roughness: 0.05,
-      transmission: 0.6,
-      thickness: 0.5,
+      roughness: 0.02,
+      transmission: 0.75,
+      thickness: 0.3,
       side: THREE.DoubleSide,
+      clearcoat: 0.1,
+      clearcoatRoughness: 0.1,
     });
   }, [lensColor]);
 
@@ -130,6 +132,8 @@ const GlassesModel = ({
         return { lensWidth: 0.52, lensHeight: 0.30, bridgeWidth: 0.14, frameThickness: 0.032, lensGap: 0.36 };
       case 'oversized':
         return { lensWidth: 0.62, lensHeight: 0.48, bridgeWidth: 0.16, frameThickness: 0.038, lensGap: 0.40 };
+      case 'thin_metal':
+        return { lensWidth: 0.46, lensHeight: 0.36, bridgeWidth: 0.12, frameThickness: 0.012, lensGap: 0.34 };
       default:
         return { lensWidth: 0.48, lensHeight: 0.38, bridgeWidth: 0.14, frameThickness: 0.030, lensGap: 0.36 };
     }

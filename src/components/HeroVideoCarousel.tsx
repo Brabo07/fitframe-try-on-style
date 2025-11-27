@@ -141,7 +141,7 @@ const HeroVideoCarousel = () => {
         <div className="text-center max-w-4xl mx-auto">
           <h1 
             key={`title-${currentIndex}`}
-            className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-4 animate-fade-in-up drop-shadow-lg"
+            className="text-4xl md:text-6xl lg:text-7xl font-bold text-primary mb-4 animate-fade-in-up drop-shadow-lg"
           >
             Try On Stylish Frames Instantly
           </h1>
@@ -151,10 +151,10 @@ const HeroVideoCarousel = () => {
             Explore frames through real videos and motion previews
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up stagger-2">
-            <Button asChild size="lg" className="text-base px-8 hover:scale-105 transition-all shadow-elevated">
+            <Button asChild size="lg" variant="premium" className="text-base px-8 rounded-xl">
               <Link to="/try-on">Start Virtual Try-On</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="bg-background/30 backdrop-blur-sm border-2 hover:bg-background/50 hover:scale-105 transition-all text-base px-8">
+            <Button asChild size="lg" variant="outline" className="bg-background/30 backdrop-blur-sm border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all text-base px-8 rounded-xl">
               <Link to="/browse">Browse Collection</Link>
             </Button>
           </div>
@@ -166,7 +166,7 @@ const HeroVideoCarousel = () => {
           className="absolute bottom-32 left-4 md:left-8 text-left animate-slide-in-left"
         >
           <p className="text-sm text-foreground/70 mb-1 drop-shadow">{videos[currentIndex].subtitle}</p>
-          <h3 className="text-xl md:text-2xl font-semibold text-foreground drop-shadow-lg">{videos[currentIndex].title}</h3>
+          <h3 className="text-xl md:text-2xl font-bold text-primary drop-shadow-lg">{videos[currentIndex].title}</h3>
         </div>
       </div>
 
@@ -174,10 +174,10 @@ const HeroVideoCarousel = () => {
       <div className="absolute bottom-8 left-0 right-0 z-30 flex items-center justify-center gap-4">
         <button
           onClick={goToPrevious}
-          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110"
+          className="p-3 rounded-xl bg-primary/20 backdrop-blur-sm hover:bg-primary/40 transition-all hover:scale-110"
           aria-label="Previous video"
         >
-          <ChevronLeft className="h-5 w-5 text-foreground" />
+          <ChevronLeft className="h-5 w-5 text-primary" />
         </button>
 
         {/* Dots indicator */}
@@ -188,8 +188,8 @@ const HeroVideoCarousel = () => {
               onClick={() => setCurrentIndex(index)}
               className={`h-2 transition-all duration-300 rounded-full ${
                 index === currentIndex 
-                  ? "w-8 bg-primary shadow-lg" 
-                  : "w-2 bg-foreground/30 hover:bg-foreground/50"
+                  ? "w-8 bg-accent shadow-gold" 
+                  : "w-2 bg-primary/30 hover:bg-primary/50"
               }`}
               aria-label={`Go to video ${index + 1}`}
             />
@@ -198,29 +198,29 @@ const HeroVideoCarousel = () => {
 
         <button
           onClick={goToNext}
-          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110"
+          className="p-3 rounded-xl bg-primary/20 backdrop-blur-sm hover:bg-primary/40 transition-all hover:scale-110"
           aria-label="Next video"
         >
-          <ChevronRight className="h-5 w-5 text-foreground" />
+          <ChevronRight className="h-5 w-5 text-primary" />
         </button>
 
         {/* Mute toggle */}
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className="p-3 rounded-full bg-background/30 backdrop-blur-sm hover:bg-background/50 transition-all hover:scale-110 ml-4"
+          className="p-3 rounded-xl bg-primary/20 backdrop-blur-sm hover:bg-primary/40 transition-all hover:scale-110 ml-4"
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? (
-            <VolumeX className="h-5 w-5 text-foreground" />
+            <VolumeX className="h-5 w-5 text-primary" />
           ) : (
-            <Volume2 className="h-5 w-5 text-foreground" />
+            <Volume2 className="h-5 w-5 text-primary" />
           )}
         </button>
       </div>
 
       {/* Video title badges */}
       <div className="absolute top-24 right-4 md:right-8 z-30">
-        <div className="bg-primary/90 backdrop-blur-sm text-primary-foreground px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-fade-in">
+        <div className="bg-accent text-accent-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-gold animate-fade-in">
           {currentIndex + 1} / {videos.length}
         </div>
       </div>

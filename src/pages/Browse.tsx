@@ -84,8 +84,8 @@ const Browse = () => {
         {recommendations.length > 0 && (
           <div className="mb-12 animate-fade-in">
             <div className="flex items-center gap-2 mb-6">
-              <Sparkles className="h-6 w-6 text-primary animate-pulse" />
-              <h2 className="text-3xl font-bold">Best For You</h2>
+              <Sparkles className="h-6 w-6 text-accent animate-pulse" />
+              <h2 className="text-3xl font-bold text-primary">Best For You</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {recommendations.map((product) => (
@@ -96,16 +96,16 @@ const Browse = () => {
         )}
 
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Discover Your Style</h1>
+          <h1 className="text-4xl font-bold mb-2 text-primary">Discover Your Style</h1>
           <p className="text-muted-foreground">Find the perfect glasses that match your personality</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <Select value={styleFilter} onValueChange={setStyleFilter}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-full sm:w-48 rounded-xl border-border/50">
               <SelectValue placeholder="Frame Style" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               <SelectItem value="all">All Styles</SelectItem>
               <SelectItem value="aviator">Aviator</SelectItem>
               <SelectItem value="wayfarer">Wayfarer</SelectItem>
@@ -117,10 +117,10 @@ const Browse = () => {
           </Select>
 
           <Select value={genderFilter} onValueChange={setGenderFilter}>
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger className="w-full sm:w-48 rounded-xl border-border/50">
               <SelectValue placeholder="Gender" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               <SelectItem value="all">All</SelectItem>
               <SelectItem value="male">Male</SelectItem>
               <SelectItem value="female">Female</SelectItem>
@@ -131,7 +131,7 @@ const Browse = () => {
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-accent" />
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

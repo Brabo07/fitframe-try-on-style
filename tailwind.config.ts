@@ -54,12 +54,14 @@ export default {
         'gradient-hero': 'var(--gradient-hero)',
         'gradient-card': 'var(--gradient-card)',
         'gradient-premium': 'var(--gradient-premium)',
+        'gradient-gold': 'var(--gradient-gold)',
       },
       boxShadow: {
         'elegant': 'var(--shadow-elegant)',
         'card': 'var(--shadow-card)',
         'hover': 'var(--shadow-hover)',
         'elevated': 'var(--shadow-elevated)',
+        'gold': 'var(--shadow-gold)',
       },
       transitionProperty: {
         'smooth': 'var(--transition-smooth)',

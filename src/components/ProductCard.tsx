@@ -129,11 +129,11 @@ const ProductCard = ({ product }: ProductCardProps) => {
     <>
       <Link to={`/product/${product.id}`}>
         <Card 
-          className="overflow-hidden hover:shadow-hover transition-all duration-300 group border-border/50 card-premium hover-lift"
+          className="overflow-hidden transition-all duration-300 group border-accent/10 rounded-2xl shadow-card hover:shadow-hover hover:-translate-y-1"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative aspect-square overflow-hidden bg-muted">
+          <div className="relative aspect-square overflow-hidden bg-muted/50">
             {/* Video preview on hover */}
             <video
               ref={videoRef}
@@ -156,7 +156,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
             />
 
             {/* Play indicator */}
-            <div className={`absolute bottom-3 left-3 flex items-center gap-1 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium transition-opacity duration-300 ${
+            <div className={`absolute bottom-3 left-3 flex items-center gap-1 bg-primary/90 text-primary-foreground backdrop-blur-sm px-3 py-1.5 rounded-xl text-xs font-semibold transition-opacity duration-300 ${
               isHovered ? "opacity-100" : "opacity-0"
             }`}>
               <Play className="h-3 w-3 fill-current" />
@@ -168,7 +168,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/90 backdrop-blur-sm hover:bg-background hover:scale-110 transition-all duration-300"
+                className="bg-background/95 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground rounded-xl transition-all duration-300"
                 onClick={handleTryOn}
               >
                 <Camera className="h-5 w-5" />
@@ -176,26 +176,26 @@ const ProductCard = ({ product }: ProductCardProps) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/90 backdrop-blur-sm hover:bg-background hover:scale-110 transition-all duration-300"
+                className="bg-background/95 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground rounded-xl transition-all duration-300"
                 onClick={toggleFavorite}
               >
                 <Heart
-                  className={`h-5 w-5 transition-all duration-300 ${isFavorite ? "fill-primary text-primary" : ""}`}
+                  className={`h-5 w-5 transition-all duration-300 ${isFavorite ? "fill-accent text-accent" : ""}`}
                 />
               </Button>
             </div>
           </div>
           <CardContent className="p-4 space-y-3">
             <div>
-              <h3 className="font-semibold text-base line-clamp-1">{product.name}</h3>
+              <h3 className="font-bold text-base line-clamp-1 text-primary">{product.name}</h3>
               <p className="text-sm text-muted-foreground">{product.brand}</p>
             </div>
             <div className="flex items-center justify-between">
-              <p className="text-lg font-bold text-primary">{formatNaira(product.price)}</p>
+              <p className="text-lg font-bold text-accent">{formatNaira(product.price)}</p>
               <Button
                 size="sm"
                 variant="secondary"
-                className="hover:scale-105 transition-transform"
+                className="rounded-lg"
                 onClick={handleAddToCart}
               >
                 <ShoppingCart className="h-4 w-4 mr-1" />
@@ -205,7 +205,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
             <Button
               variant="outline"
               size="sm"
-              className="w-full"
+              className="w-full rounded-xl border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
               onClick={handleTryOn}
             >
               <Camera className="h-4 w-4 mr-2" />
