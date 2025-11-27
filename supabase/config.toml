@@ -1,1 +1,4 @@
 project_id = "gdzmbxhomdwwxhrbrlyz"
+
+[functions.analyze-face-shape]
+verify_jwt = false

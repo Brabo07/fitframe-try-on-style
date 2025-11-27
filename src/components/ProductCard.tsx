@@ -1,21 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Camera } from "lucide-react";
+import { Heart, Camera, ShoppingCart, Play } from "lucide-react";
 import { toast } from "sonner";
 import ARTryOn from "@/components/ARTryOn";
+import { formatNaira } from "@/utils/formatCurrency";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface ProductCardProps {
   product: Tables<"glasses_products">;
 }
 
+// Placeholder videos for product motion previews
+const productVideos: Record<string, string> = {
+  default: "https://videos.pexels.com/video-files/5699838/5699838-sd_360_640_25fps.mp4"
+};
+
 const ProductCard = ({ product }: ProductCardProps) => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showARTryOn, setShowARTryOn] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const checkFavorite = async () => {
@@ -36,8 +44,20 @@ const ProductCard = ({ product }: ProductCardProps) => {
     checkFavorite();
   }, [product.id]);
 
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isHovered) {
+        videoRef.current.play().catch(() => {});
+      } else {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+    }
+  }, [isHovered]);
+
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     if (!user) {
       toast.error("Please sign in to save favorites");
@@ -71,16 +91,79 @@ const ProductCard = ({ product }: ProductCardProps) => {
     setShowARTryOn(true);
   };
 
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!user) {
+      toast.error("Please sign in to add to cart");
+      return;
+    }
+
+    try {
+      const { data: existing } = await supabase
+        .from("cart_items")
+        .select("id, quantity")
+        .eq("user_id", user.id)
+        .eq("product_id", product.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("cart_items")
+          .update({ quantity: existing.quantity + 1 })
+          .eq("id", existing.id);
+      } else {
+        await supabase
+          .from("cart_items")
+          .insert({ user_id: user.id, product_id: product.id, quantity: 1 });
+      }
+      
+      toast.success("Added to cart");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add to cart");
+    }
+  };
+
   return (
     <>
       <Link to={`/product/${product.id}`}>
-        <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group border-border/50">
+        <Card 
+          className="overflow-hidden hover:shadow-hover transition-all duration-300 group border-border/50 card-premium hover-lift"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
           <div className="relative aspect-square overflow-hidden bg-muted">
+            {/* Video preview on hover */}
+            <video
+              ref={videoRef}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+                isHovered ? "opacity-100" : "opacity-0"
+              }`}
+              src={productVideos.default}
+              muted
+              loop
+              playsInline
+            />
+            
+            {/* Static image */}
             <img
               src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
               alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              className={`w-full h-full object-cover transition-all duration-500 ${
+                isHovered ? "opacity-0 scale-110" : "opacity-100"
+              }`}
             />
+
+            {/* Play indicator */}
+            <div className={`absolute bottom-3 left-3 flex items-center gap-1 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium transition-opacity duration-300 ${
+              isHovered ? "opacity-100" : "opacity-0"
+            }`}>
+              <Play className="h-3 w-3 fill-current" />
+              Preview
+            </div>
+
+            {/* Action buttons */}
             <div className="absolute top-3 right-3 flex gap-2">
               <Button
                 variant="ghost"
@@ -102,13 +185,32 @@ const ProductCard = ({ product }: ProductCardProps) => {
               </Button>
             </div>
           </div>
-          <CardContent className="p-5 space-y-2">
-            <h3 className="font-semibold text-lg line-clamp-1">{product.name}</h3>
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>{product.brand}</span>
-              <span>{product.frame_color}</span>
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <h3 className="font-semibold text-base line-clamp-1">{product.name}</h3>
+              <p className="text-sm text-muted-foreground">{product.brand}</p>
             </div>
-            <p className="text-xl font-bold">${product.price}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-lg font-bold text-primary">{formatNaira(product.price)}</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="hover:scale-105 transition-transform"
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleTryOn}
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Try On
+            </Button>
           </CardContent>
         </Card>
       </Link>
