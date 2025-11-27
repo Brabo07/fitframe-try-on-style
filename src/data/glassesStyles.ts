@@ -1,3 +1,5 @@
+import type { Tables } from "@/integrations/supabase/types";
+
 export interface GlassesStyle {
   id: string;
   name: string;
@@ -6,6 +8,7 @@ export interface GlassesStyle {
   category: string;
 }
 
+// Demo glasses for the catalog demo page
 export const glassesStyles: GlassesStyle[] = [
   {
     id: "aviator-gold",
@@ -65,7 +68,59 @@ export const glassesStyles: GlassesStyle[] = [
   },
 ];
 
-// SVG glasses templates for overlay
+// Color mapping for frame colors to actual hex values
+const colorMap: Record<string, string> = {
+  gold: "#D4AF37",
+  black: "#1a1a1a",
+  tortoise: "#8B4513",
+  brown: "#8B4513",
+  pink: "#FF69B4",
+  silver: "#C0C0C0",
+  blue: "#4169E1",
+  red: "#DC143C",
+  white: "#F5F5F5",
+  gray: "#808080",
+  grey: "#808080",
+  green: "#228B22",
+  purple: "#800080",
+};
+
+// Get frame color from product
+export const getFrameColorHex = (color: string): string => {
+  const normalizedColor = color.toLowerCase();
+  return colorMap[normalizedColor] || "#1a1a1a";
+};
+
+// Get lens color with transparency based on frame color
+export const getLensColor = (color: string): string => {
+  const normalizedColor = color.toLowerCase();
+  switch (normalizedColor) {
+    case "gold": return "rgba(139, 90, 43, 0.3)";
+    case "black": return "rgba(30, 30, 30, 0.4)";
+    case "tortoise": 
+    case "brown": return "rgba(139, 69, 19, 0.3)";
+    case "pink": return "rgba(255, 182, 193, 0.3)";
+    case "silver": 
+    case "gray":
+    case "grey": return "rgba(128, 128, 128, 0.3)";
+    case "blue": return "rgba(65, 105, 225, 0.3)";
+    case "red": return "rgba(220, 20, 60, 0.3)";
+    case "white": return "rgba(245, 245, 245, 0.2)";
+    case "green": return "rgba(34, 139, 34, 0.3)";
+    case "purple": return "rgba(128, 0, 128, 0.3)";
+    default: return "rgba(30, 30, 30, 0.35)";
+  }
+};
+
+// Convert database product to glasses template format
+export const productToGlassesTemplate = (product: Tables<"glasses_products">) => {
+  return {
+    frameColor: getFrameColorHex(product.frame_color),
+    lensColor: getLensColor(product.frame_color),
+  };
+};
+
+// SVG glasses templates for overlay (for demo catalog)
 export const glassesTemplates: Record<string, { frameColor: string; lensColor: string }> = {
   "aviator-gold": { frameColor: "#D4AF37", lensColor: "rgba(139, 90, 43, 0.3)" },
   "wayfarer-black": { frameColor: "#1a1a1a", lensColor: "rgba(30, 30, 30, 0.4)" },

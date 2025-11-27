@@ -5,22 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Camera, Filter } from "lucide-react";
-import { glassesStyles, GlassesStyle } from "@/data/glassesStyles";
+import { glassesStyles } from "@/data/glassesStyles";
 import { cn } from "@/lib/utils";
 
 const categories = ["All", "Aviator", "Wayfarer", "Round", "Cat Eye", "Rectangular", "Oversized", "Geometric", "Clubmaster"];
 
 const Catalog = () => {
   const [showARTryOn, setShowARTryOn] = useState(false);
-  const [selectedGlasses, setSelectedGlasses] = useState<GlassesStyle | null>(null);
   const [activeCategory, setActiveCategory] = useState("All");
 
   const filteredGlasses = activeCategory === "All" 
     ? glassesStyles 
     : glassesStyles.filter(g => g.category === activeCategory);
 
-  const handleTryOn = (glasses: GlassesStyle) => {
-    setSelectedGlasses(glasses);
+  const handleTryOn = () => {
     setShowARTryOn(true);
   };
 
@@ -77,7 +75,7 @@ const Catalog = () => {
                     <div className="absolute bottom-3 left-3 right-3">
                       <Button
                         size="sm"
-                        onClick={() => handleTryOn(glasses)}
+                        onClick={handleTryOn}
                         className="w-full gap-2"
                       >
                         <Camera className="h-4 w-4" />
@@ -100,7 +98,7 @@ const Catalog = () => {
                     variant="outline"
                     size="sm"
                     className="w-full mt-3 gap-2"
-                    onClick={() => handleTryOn(glasses)}
+                    onClick={handleTryOn}
                   >
                     <Camera className="h-4 w-4" />
                     Virtual Try-On
@@ -119,11 +117,8 @@ const Catalog = () => {
 
       {showARTryOn && (
         <ARTryOn
-          product={selectedGlasses ? { frame_style: selectedGlasses.category.toLowerCase(), frame_color: selectedGlasses.color } : undefined}
-          onClose={() => {
-            setShowARTryOn(false);
-            setSelectedGlasses(null);
-          }}
+          onClose={() => setShowARTryOn(false)}
+          useRealProducts={false}
         />
       )}
     </div>

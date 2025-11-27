@@ -3,13 +3,37 @@ import Header from "@/components/Header";
 import ARTryOn from "@/components/ARTryOn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Camera, Glasses, Sparkles, ArrowRight } from "lucide-react";
-import { glassesStyles } from "@/data/glassesStyles";
+import { Camera, Glasses, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 
 const TryOn = () => {
   const [showARTryOn, setShowARTryOn] = useState(false);
+  const [products, setProducts] = useState<Tables<"glasses_products">[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("glasses_products")
+          .select("*")
+          .eq("in_stock", true)
+          .limit(4);
+        
+        if (error) throw error;
+        setProducts(data || []);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const features = [
     {
@@ -19,8 +43,8 @@ const TryOn = () => {
     },
     {
       icon: Glasses,
-      title: "Multiple Styles",
-      description: "Try on various frame styles including aviators, wayfarers, and more",
+      title: "Real Products",
+      description: "Try on actual frames from our store catalog before you buy",
     },
     {
       icon: Sparkles,
@@ -45,7 +69,7 @@ const TryOn = () => {
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
               See how glasses look on you in real-time using our advanced AR technology.
-              No downloads required - works right in your browser.
+              Try on real products from our store - no downloads required.
             </p>
             <Button
               size="lg"
@@ -75,36 +99,43 @@ const TryOn = () => {
           {/* Available Styles Preview */}
           <section className="mb-12">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Available Styles</h2>
+              <h2 className="text-2xl font-bold">Available in Try-On</h2>
               <Button
                 variant="ghost"
-                onClick={() => navigate("/catalog")}
+                onClick={() => navigate("/browse")}
                 className="gap-1"
               >
                 View All <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {glassesStyles.slice(0, 4).map((glasses) => (
-                <Card
-                  key={glasses.id}
-                  className="overflow-hidden cursor-pointer hover:shadow-elegant transition-all hover:scale-105"
-                  onClick={() => setShowARTryOn(true)}
-                >
-                  <div className="aspect-[4/3] overflow-hidden">
-                    <img
-                      src={glasses.imageUrl}
-                      alt={glasses.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <CardContent className="p-3">
-                    <h3 className="font-medium text-sm">{glasses.name}</h3>
-                    <p className="text-xs text-muted-foreground">{glasses.category}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {products.map((product) => (
+                  <Card
+                    key={product.id}
+                    className="overflow-hidden cursor-pointer hover:shadow-elegant transition-all hover:scale-105"
+                    onClick={() => setShowARTryOn(true)}
+                  >
+                    <div className="aspect-[4/3] overflow-hidden">
+                      <img
+                        src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <CardContent className="p-3">
+                      <h3 className="font-medium text-sm">{product.name}</h3>
+                      <p className="text-xs text-muted-foreground">{product.brand}</p>
+                      <p className="text-sm font-bold text-primary mt-1">${product.price}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* CTA Section */}
@@ -116,17 +147,18 @@ const TryOn = () => {
             <div className="flex gap-4 justify-center">
               <Button
                 variant="outline"
-                onClick={() => navigate("/catalog")}
-                className="gap-2"
-              >
-                <Glasses className="h-4 w-4" />
-                View Catalog
-              </Button>
-              <Button
                 onClick={() => navigate("/browse")}
                 className="gap-2"
               >
-                Shop Now <ArrowRight className="h-4 w-4" />
+                <Glasses className="h-4 w-4" />
+                Browse Products
+              </Button>
+              <Button
+                onClick={() => setShowARTryOn(true)}
+                className="gap-2"
+              >
+                <Camera className="h-4 w-4" />
+                Try On Now
               </Button>
             </div>
           </section>
