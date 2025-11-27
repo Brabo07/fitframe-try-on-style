@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, Camera, Heart, Glasses, ArrowRight } from "lucide-react";
 import Header from "@/components/Header";
-import HeroVideoCarousel from "@/components/HeroVideoCarousel";
+import HeroImageCollage from "@/components/HeroImageCollage";
 import OnboardingTutorial from "@/components/OnboardingTutorial";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -52,8 +52,8 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      {/* Hero Video Carousel */}
-      <HeroVideoCarousel />
+      {/* Hero Image Collage */}
+      <HeroImageCollage />
 
       {/* Features Section */}
       <section className="py-20 md:py-28 bg-background">
