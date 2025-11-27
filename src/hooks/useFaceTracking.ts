@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { FaceMesh, Results } from "@mediapipe/face_mesh";
-import { Camera } from "@mediapipe/camera_utils";
 
 export interface FaceLandmarks {
   // Eye landmarks
@@ -146,17 +144,34 @@ const LANDMARKS = {
   RIGHT_TEMPLE: 356,
 };
 
+// Load MediaPipe scripts dynamically
+const loadScript = (src: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => resolve();
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+};
+
 export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTrackingProps) => {
   const [landmarks, setLandmarks] = useState<FaceLandmarks | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState(0);
   
-  const faceMeshRef = useRef<FaceMesh | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const faceMeshRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
   const smootherRef = useRef(new LandmarkSmoother());
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(Date.now());
+  const streamRef = useRef<MediaStream | null>(null);
 
   const calculateRotation = useCallback((landmarks: any[]) => {
     const noseBridge = landmarks[LANDMARKS.NOSE_BRIDGE];
@@ -181,10 +196,19 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
     return { pitch, yaw, roll };
   }, []);
 
-  const processResults = useCallback((results: Results) => {
-    if (!canvasRef.current) return;
+  const processResults = useCallback((results: any) => {
+    if (!canvasRef.current || !videoRef.current) return;
 
     const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      // Draw video frame to canvas
+      ctx.save();
+      ctx.scale(-1, 1); // Mirror the video
+      ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
     
     // Update FPS counter
     frameCountRef.current++;
@@ -201,13 +225,13 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
       const width = canvas.width;
       const height = canvas.height;
 
-      // Calculate eye centers
+      // Calculate eye centers (mirror the x coordinates)
       const leftEyeCenter = {
-        x: ((faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x + faceLandmarks[LANDMARKS.LEFT_EYE_INNER].x) / 2) * width,
+        x: width - ((faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x + faceLandmarks[LANDMARKS.LEFT_EYE_INNER].x) / 2) * width,
         y: ((faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].y + faceLandmarks[LANDMARKS.LEFT_EYE_INNER].y) / 2) * height,
       };
       const rightEyeCenter = {
-        x: ((faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x + faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x) / 2) * width,
+        x: width - ((faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x + faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x) / 2) * width,
         y: ((faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].y + faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].y) / 2) * height,
       };
 
@@ -217,42 +241,42 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
 
       const rawLandmarks: FaceLandmarks = {
         leftEyeOuter: {
-          x: faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x * width,
+          x: width - faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].x * width,
           y: faceLandmarks[LANDMARKS.LEFT_EYE_OUTER].y * height,
         },
         leftEyeInner: {
-          x: faceLandmarks[LANDMARKS.LEFT_EYE_INNER].x * width,
+          x: width - faceLandmarks[LANDMARKS.LEFT_EYE_INNER].x * width,
           y: faceLandmarks[LANDMARKS.LEFT_EYE_INNER].y * height,
         },
         rightEyeOuter: {
-          x: faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x * width,
+          x: width - faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].x * width,
           y: faceLandmarks[LANDMARKS.RIGHT_EYE_OUTER].y * height,
         },
         rightEyeInner: {
-          x: faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x * width,
+          x: width - faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].x * width,
           y: faceLandmarks[LANDMARKS.RIGHT_EYE_INNER].y * height,
         },
         leftEyeCenter,
         rightEyeCenter,
         noseBridge: {
-          x: faceLandmarks[LANDMARKS.NOSE_BRIDGE].x * width,
+          x: width - faceLandmarks[LANDMARKS.NOSE_BRIDGE].x * width,
           y: faceLandmarks[LANDMARKS.NOSE_BRIDGE].y * height,
         },
         noseTop: {
-          x: faceLandmarks[LANDMARKS.NOSE_TOP].x * width,
+          x: width - faceLandmarks[LANDMARKS.NOSE_TOP].x * width,
           y: faceLandmarks[LANDMARKS.NOSE_TOP].y * height,
         },
         noseTip: {
-          x: faceLandmarks[LANDMARKS.NOSE_TIP].x * width,
+          x: width - faceLandmarks[LANDMARKS.NOSE_TIP].x * width,
           y: faceLandmarks[LANDMARKS.NOSE_TIP].y * height,
           z: faceLandmarks[LANDMARKS.NOSE_TIP].z || 0,
         },
         leftTemple: {
-          x: faceLandmarks[LANDMARKS.LEFT_TEMPLE].x * width,
+          x: width - faceLandmarks[LANDMARKS.LEFT_TEMPLE].x * width,
           y: faceLandmarks[LANDMARKS.LEFT_TEMPLE].y * height,
         },
         rightTemple: {
-          x: faceLandmarks[LANDMARKS.RIGHT_TEMPLE].x * width,
+          x: width - faceLandmarks[LANDMARKS.RIGHT_TEMPLE].x * width,
           y: faceLandmarks[LANDMARKS.RIGHT_TEMPLE].y * height,
         },
         faceWidth: Math.abs(
@@ -268,18 +292,34 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
     } else {
       setLandmarks(null);
     }
-  }, [canvasRef, calculateRotation]);
+  }, [canvasRef, videoRef, calculateRotation]);
 
   useEffect(() => {
     if (!isActive || !videoRef.current || !canvasRef.current) return;
+
+    let isMounted = true;
 
     const initFaceMesh = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
+        // Load MediaPipe scripts from CDN
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+
+        if (!isMounted) return;
+
+        // Access the global objects
+        const FaceMesh = (window as any).FaceMesh;
+        const Camera = (window as any).Camera;
+
+        if (!FaceMesh || !Camera) {
+          throw new Error('Failed to load MediaPipe libraries');
+        }
+
         const faceMesh = new FaceMesh({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
         });
 
         faceMesh.setOptions({
@@ -292,35 +332,74 @@ export const useFaceTracking = ({ videoRef, canvasRef, isActive }: UseFaceTracki
         faceMesh.onResults(processResults);
         faceMeshRef.current = faceMesh;
 
-        if (videoRef.current) {
-          const camera = new Camera(videoRef.current, {
-            onFrame: async () => {
-              if (faceMeshRef.current && videoRef.current) {
-                await faceMeshRef.current.send({ image: videoRef.current });
-              }
-            },
-            width: 1280,
-            height: 720,
+        // Get camera stream with explicit permissions
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
           });
+          
+          if (!isMounted) {
+            stream.getTracks().forEach(track => track.stop());
+            return;
+          }
+          
+          streamRef.current = stream;
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
 
-          await camera.start();
-          cameraRef.current = camera;
+            const camera = new Camera(videoRef.current, {
+              onFrame: async () => {
+                if (faceMeshRef.current && videoRef.current && isMounted) {
+                  await faceMeshRef.current.send({ image: videoRef.current });
+                }
+              },
+              width: 1280,
+              height: 720,
+            });
+
+            await camera.start();
+            cameraRef.current = camera;
+          }
+        } catch (camErr: any) {
+          console.error("Camera error:", camErr);
+          if (camErr.name === 'NotAllowedError') {
+            throw new Error('Camera permission denied. Please allow camera access to use AR try-on.');
+          } else if (camErr.name === 'NotFoundError') {
+            throw new Error('No camera found. Please connect a camera to use AR try-on.');
+          } else {
+            throw new Error('Failed to access camera. Please check your camera and try again.');
+          }
         }
 
-        setIsLoading(false);
-      } catch (err) {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      } catch (err: any) {
         console.error("Error initializing face tracking:", err);
-        setError("Failed to initialize face tracking. Please check camera permissions.");
-        setIsLoading(false);
+        if (isMounted) {
+          setError(err.message || "Failed to initialize face tracking. Please check camera permissions.");
+          setIsLoading(false);
+        }
       }
     };
 
     initFaceMesh();
 
     return () => {
+      isMounted = false;
       if (cameraRef.current) {
         cameraRef.current.stop();
         cameraRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
       if (faceMeshRef.current) {
         faceMeshRef.current.close();
