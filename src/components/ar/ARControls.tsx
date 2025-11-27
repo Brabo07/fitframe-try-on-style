@@ -115,8 +115,8 @@ const ARControls = ({ adjustments, onChange, isVisible, onToggle }: ARControlsPr
           </div>
           <Slider
             value={[adjustments.scale]}
-            min={0.7}
-            max={1.3}
+            min={0.3}
+            max={1.5}
             step={0.02}
             onValueChange={([value]) => onChange({ ...adjustments, scale: value })}
             className="[&_[role=slider]]:bg-primary [&_[role=slider]]:border-0 [&_.bg-primary]:bg-primary/50"
