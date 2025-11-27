@@ -8,6 +8,7 @@ import Glasses3DOverlay from "@/components/ar/Glasses3DOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import ARControls, { ARAdjustments, defaultAdjustments } from "@/components/ar/ARControls";
+import FrameShapeSelector, { FrameShape } from "@/components/ar/FrameShapeSelector";
 import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/utils/formatCurrency";
@@ -22,6 +23,9 @@ interface ARTryOnProps {
 const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => {
   const [mode, setMode] = useState<"camera" | "photo">("camera");
   const [renderMode, setRenderMode] = useState<"3d" | "2d">("3d");
+  const [selectedFrameShape, setSelectedFrameShape] = useState<FrameShape>(
+    (product?.frame_style as FrameShape) || "aviator"
+  );
   const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(
     product || null
   );
@@ -182,24 +186,24 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   const canvasHeight = canvasRef.current?.height || 720;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in">
+    <div className="fixed inset-0 bg-gradient-to-b from-primary/95 to-primary z-50 flex flex-col animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
-        <div className="text-white">
-          <h2 className="text-xl font-semibold">Virtual Try-On</h2>
-          <p className="text-sm text-white/70">
+      <div className="flex items-center justify-between p-4 bg-gradient-to-b from-primary to-transparent">
+        <div className="text-primary-foreground">
+          <h2 className="text-xl font-bold">Virtual Try-On</h2>
+          <p className="text-sm text-primary-foreground/70">
             {selectedProduct ? selectedProduct.name : (mode === "camera" ? "Move your head to see different angles" : "Photo mode")}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {/* Render mode toggle */}
-          <div className="flex items-center bg-white/10 rounded-full p-1">
+          <div className="flex items-center bg-primary-foreground/10 rounded-xl p-1">
             <button
               onClick={() => setRenderMode("3d")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
                 renderMode === "3d" 
-                  ? "bg-primary text-primary-foreground" 
-                  : "text-white/70 hover:text-white"
+                  ? "bg-accent text-accent-foreground shadow-gold" 
+                  : "text-primary-foreground/70 hover:text-primary-foreground"
               }`}
             >
               <Box className="h-3 w-3 inline mr-1" />
@@ -207,10 +211,10 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             </button>
             <button
               onClick={() => setRenderMode("2d")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
                 renderMode === "2d" 
-                  ? "bg-primary text-primary-foreground" 
-                  : "text-white/70 hover:text-white"
+                  ? "bg-accent text-accent-foreground shadow-gold" 
+                  : "text-primary-foreground/70 hover:text-primary-foreground"
               }`}
             >
               <Layers className="h-3 w-3 inline mr-1" />
@@ -219,7 +223,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           </div>
           
           {mode === "camera" && !capturedImage && (
-            <div className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded">
+            <div className="text-xs text-primary-foreground/60 bg-primary-foreground/10 px-2 py-1 rounded-lg">
               {fps} FPS
             </div>
           )}
@@ -227,31 +231,40 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="text-white hover:bg-white/20"
+            className="text-primary-foreground hover:bg-primary-foreground/20 rounded-xl"
           >
             <X className="h-6 w-6" />
           </Button>
         </div>
       </div>
 
+      {/* Frame Shape Selector */}
+      <div className="px-4 pb-2">
+        <p className="text-xs text-primary-foreground/60 mb-2 font-medium">Frame Shape</p>
+        <FrameShapeSelector
+          selectedShape={selectedFrameShape}
+          onSelect={setSelectedFrameShape}
+        />
+      </div>
+
       {/* Main Content */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
         {isLoading && mode === "camera" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
-            <div className="text-center text-white">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3" />
-              <p className="text-lg">Loading face tracking...</p>
-              <p className="text-sm text-white/60">This may take a moment</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/50 z-20">
+            <div className="text-center text-primary-foreground">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-accent" />
+              <p className="text-lg font-medium">Loading face tracking...</p>
+              <p className="text-sm text-primary-foreground/60">This may take a moment</p>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
-            <div className="text-center text-white p-6 bg-destructive/20 rounded-lg max-w-md">
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/50 z-20">
+            <div className="text-center text-primary-foreground p-6 bg-destructive/20 rounded-2xl max-w-md border border-destructive/30">
               <Camera className="h-12 w-12 mx-auto mb-3 text-destructive" />
-              <p className="text-lg font-medium mb-2">Camera Error</p>
-              <p className="text-sm text-white/80">{error}</p>
+              <p className="text-lg font-bold mb-2">Camera Error</p>
+              <p className="text-sm text-primary-foreground/80">{error}</p>
               <Button
                 variant="secondary"
                 className="mt-4"
@@ -280,7 +293,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             ref={canvasRef}
             width={1280}
             height={720}
-            className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
+            className="max-w-full max-h-[50vh] rounded-2xl shadow-elevated"
           />
 
           {/* 3D or 2D Glasses Overlay */}
@@ -290,7 +303,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
               selectedProduct={selectedProduct}
-              frameStyle={selectedProduct?.frame_style || "wayfarer"}
+              frameStyle={selectedFrameShape}
               adjustments={arAdjustments}
             />
           ) : (
@@ -325,25 +338,25 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
 
         {/* Selected product price tag */}
         {selectedProduct && (
-          <div className="absolute top-4 right-4 bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full text-sm font-bold">
+          <div className="absolute top-4 right-4 bg-accent text-accent-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-gold">
             {formatNaira(selectedProduct.price)}
           </div>
         )}
 
         {/* Captured image overlay */}
         {capturedImage && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/90">
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/95">
             <img
               src={capturedImage}
               alt="Captured"
-              className="max-w-full max-h-[60vh] rounded-lg shadow-2xl"
+              className="max-w-full max-h-[60vh] rounded-2xl shadow-elevated"
             />
           </div>
         )}
       </div>
 
       {/* Glasses Carousel */}
-      <div className="bg-gradient-to-t from-black/90 to-black/60 pt-4 pb-2">
+      <div className="bg-gradient-to-t from-primary to-primary/80 pt-4 pb-2">
         {useRealProducts ? (
           <ProductGlassesCarousel
             selectedProductId={selectedProduct?.id || ""}
@@ -359,14 +372,14 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
       </div>
 
       {/* Controls */}
-      <div className="bg-black/90 p-4 safe-area-inset-bottom">
+      <div className="bg-primary p-4 safe-area-inset-bottom">
         <div className="flex items-center justify-center gap-3 flex-wrap">
           {!capturedImage ? (
             <>
               <Button
                 variant="secondary"
                 onClick={() => fileInputRef.current?.click()}
-                className="gap-2"
+                className="gap-2 rounded-xl"
               >
                 <Upload className="h-4 w-4" />
                 Upload
@@ -376,7 +389,8 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
                 <Button
                   onClick={capturePhoto}
                   size="lg"
-                  className="rounded-full h-16 w-16 bg-primary hover:bg-primary/80 shadow-lg"
+                  variant="premium"
+                  className="rounded-full h-16 w-16 shadow-gold"
                   disabled={!landmarks}
                 >
                   <Camera className="h-6 w-6" />
@@ -387,7 +401,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
                 <Button
                   variant="secondary"
                   onClick={switchToCamera}
-                  className="gap-2"
+                  className="gap-2 rounded-xl"
                 >
                   <Camera className="h-4 w-4" />
                   Use Camera
@@ -397,7 +411,8 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               {selectedProduct && (
                 <Button
                   onClick={addToCart}
-                  className="gap-2"
+                  variant="premium"
+                  className="gap-2 rounded-xl"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Add to Cart
@@ -407,7 +422,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               <Button
                 variant="secondary"
                 onClick={downloadPhoto}
-                className="gap-2"
+                className="gap-2 rounded-xl"
                 disabled={!landmarks && mode === "camera"}
               >
                 <Download className="h-4 w-4" />
@@ -419,7 +434,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               <Button
                 onClick={retakePhoto}
                 variant="secondary"
-                className="gap-2"
+                className="gap-2 rounded-xl"
               >
                 <RotateCw className="h-4 w-4" />
                 Retake
@@ -427,14 +442,15 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               <Button
                 onClick={downloadPhoto}
                 variant="secondary"
-                className="gap-2"
+                className="gap-2 rounded-xl"
               >
                 <Download className="h-4 w-4" />
                 Download
               </Button>
               <Button
                 onClick={sharePhoto}
-                className="gap-2"
+                variant="premium"
+                className="gap-2 rounded-xl"
               >
                 <Share2 className="h-4 w-4" />
                 Share
@@ -443,7 +459,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
                 <Button
                   onClick={addToCart}
                   variant="secondary"
-                  className="gap-2"
+                  className="gap-2 rounded-xl"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Add to Cart
