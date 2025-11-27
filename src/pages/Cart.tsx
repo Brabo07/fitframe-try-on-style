@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { formatNaira } from "@/utils/formatCurrency";
 
 interface CartItem {
   id: string;
@@ -199,7 +200,7 @@ const Cart = () => {
                           </Button>
                         </div>
                         <p className="text-xl font-bold">
-                          ${(item.product.price * item.quantity).toFixed(2)}
+                          {formatNaira(item.product.price * item.quantity)}
                         </p>
                       </div>
                     </div>
@@ -217,7 +218,7 @@ const Cart = () => {
                 <div className="space-y-3 pb-4 border-b">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                    <span className="font-medium">{formatNaira(totalPrice)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Shipping</span>
@@ -225,16 +226,16 @@ const Cart = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tax</span>
-                    <span className="font-medium">${(totalPrice * 0.1).toFixed(2)}</span>
+                    <span className="font-medium">{formatNaira(totalPrice * 0.1)}</span>
                   </div>
                 </div>
 
                 <div className="flex justify-between items-center text-lg font-bold">
                   <span>Total</span>
-                  <span>${(totalPrice * 1.1).toFixed(2)}</span>
+                  <span>{formatNaira(totalPrice * 1.1)}</span>
                 </div>
 
-                <Button 
+                <Button
                   className="w-full" 
                   size="lg"
                   onClick={() => navigate("/checkout")}

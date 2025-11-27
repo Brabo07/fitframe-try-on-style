@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Camera, Glasses, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { formatNaira } from "@/utils/formatCurrency";
 import type { Tables } from "@/integrations/supabase/types";
 
 const TryOn = () => {
@@ -130,7 +131,7 @@ const TryOn = () => {
                     <CardContent className="p-3">
                       <h3 className="font-medium text-sm">{product.name}</h3>
                       <p className="text-xs text-muted-foreground">{product.brand}</p>
-                      <p className="text-sm font-bold text-primary mt-1">${product.price}</p>
+                      <p className="text-sm font-bold text-primary mt-1">{formatNaira(product.price)}</p>
                     </CardContent>
                   </Card>
                 ))}

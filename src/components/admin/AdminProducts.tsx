@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { formatNaira } from "@/utils/formatCurrency";
 
 const AdminProducts = () => {
   const { data: products, isLoading } = useQuery({
@@ -60,7 +61,7 @@ const AdminProducts = () => {
                   </div>
                 </TableCell>
                 <TableCell>{product.brand}</TableCell>
-                <TableCell>${Number(product.price).toFixed(2)}</TableCell>
+                <TableCell>{formatNaira(Number(product.price))}</TableCell>
                 <TableCell>
                   <Badge variant={product.in_stock ? "default" : "destructive"}>
                     {product.in_stock ? "In Stock" : "Out of Stock"}
