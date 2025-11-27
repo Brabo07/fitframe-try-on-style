@@ -1,42 +1,42 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight, Volume2, VolumeX, Play } from "lucide-react";
 
-// Real videos of people wearing glasses from Pexels
+// Real videos of people wearing glasses from Pexels (verified working URLs)
 const videos = [
   {
     id: 1,
-    url: "https://videos.pexels.com/video-files/5537587/5537587-hd_1920_1080_30fps.mp4",
-    poster: "https://images.pexels.com/videos/5537587/pexels-photo-5537587.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    url: "https://videos.pexels.com/video-files/5537587/5537587-sd_640_360_30fps.mp4",
+    poster: "https://images.pexels.com/videos/5537587/pexels-photo-5537587.jpeg?auto=compress&cs=tinysrgb&w=800",
     title: "Professional Style",
     subtitle: "Sophisticated frames for every occasion"
   },
   {
     id: 2,
-    url: "https://videos.pexels.com/video-files/4429122/4429122-hd_1920_1080_25fps.mp4",
-    poster: "https://images.pexels.com/videos/4429122/pexels-photo-4429122.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    url: "https://videos.pexels.com/video-files/4429122/4429122-sd_640_360_25fps.mp4",
+    poster: "https://images.pexels.com/videos/4429122/pexels-photo-4429122.jpeg?auto=compress&cs=tinysrgb&w=800",
     title: "Bold & Confident",
     subtitle: "Make a statement with your look"
   },
   {
     id: 3,
-    url: "https://videos.pexels.com/video-files/5699838/5699838-hd_1920_1080_25fps.mp4",
-    poster: "https://images.pexels.com/videos/5699838/pexels-photo-5699838.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    url: "https://videos.pexels.com/video-files/5699838/5699838-sd_640_360_25fps.mp4",
+    poster: "https://images.pexels.com/videos/5699838/pexels-photo-5699838.jpeg?auto=compress&cs=tinysrgb&w=800",
     title: "Casual Elegance",
     subtitle: "Everyday frames with premium quality"
   },
   {
     id: 4,
-    url: "https://videos.pexels.com/video-files/6567846/6567846-hd_1920_1080_30fps.mp4",
-    poster: "https://images.pexels.com/videos/6567846/pexels-photo-6567846.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    url: "https://videos.pexels.com/video-files/6567846/6567846-sd_640_360_30fps.mp4",
+    poster: "https://images.pexels.com/videos/6567846/pexels-photo-6567846.jpeg?auto=compress&cs=tinysrgb&w=800",
     title: "Modern Classic",
     subtitle: "Timeless designs reimagined"
   },
   {
     id: 5,
-    url: "https://videos.pexels.com/video-files/5538999/5538999-hd_1920_1080_30fps.mp4",
-    poster: "https://images.pexels.com/videos/5538999/pexels-photo-5538999.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    url: "https://videos.pexels.com/video-files/5538999/5538999-sd_640_360_30fps.mp4",
+    poster: "https://images.pexels.com/videos/5538999/pexels-photo-5538999.jpeg?auto=compress&cs=tinysrgb&w=800",
     title: "Urban Style",
     subtitle: "Street-ready eyewear"
   }
@@ -61,13 +61,25 @@ const HeroVideoCarousel = () => {
       if (video) {
         if (index === currentIndex) {
           video.currentTime = 0;
-          video.play().catch(() => {});
+          video.muted = isMuted; // Ensure video is muted for autoplay policy
+          video.play().catch((err) => {
+            console.log('Video autoplay blocked:', err);
+          });
         } else {
           video.pause();
         }
       }
     });
-  }, [currentIndex]);
+  }, [currentIndex, isMuted]);
+
+  // Initial load - play first video
+  useEffect(() => {
+    const firstVideo = videoRefs.current[0];
+    if (firstVideo) {
+      firstVideo.muted = true;
+      firstVideo.play().catch(() => {});
+    }
+  }, []);
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev - 1 + videos.length) % videos.length);
@@ -95,25 +107,27 @@ const HeroVideoCarousel = () => {
             index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
           }`}
         >
-          {/* Poster image while loading */}
-          {!isLoaded[index] && (
-            <img
-              src={video.poster}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-          )}
+          {/* Poster image as background - always visible */}
+          <img
+            src={video.poster}
+            alt={video.title}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
           
+          {/* Video overlay */}
           <video
             ref={(el) => (videoRefs.current[index] = el)}
-            className="h-full w-full object-cover"
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+              isLoaded[index] ? "opacity-100" : "opacity-0"
+            }`}
             src={video.url}
             poster={video.poster}
             muted={isMuted}
             loop
             playsInline
-            autoPlay={index === 0}
+            preload="auto"
             onLoadedData={() => handleVideoLoad(index)}
+            onCanPlay={() => handleVideoLoad(index)}
           />
           
           {/* Gradient overlays for better text readability */}
