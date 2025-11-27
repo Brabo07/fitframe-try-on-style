@@ -8,7 +8,7 @@ import Glasses3DOverlay from "@/components/ar/Glasses3DOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import ARControls, { ARAdjustments, defaultAdjustments } from "@/components/ar/ARControls";
-import FrameShapeSelector, { FrameShape } from "@/components/ar/FrameShapeSelector";
+import FrameShapePanel, { FrameShape } from "@/components/ar/FrameShapePanel";
 import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/utils/formatCurrency";
@@ -238,10 +238,9 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         </div>
       </div>
 
-      {/* Frame Shape Selector */}
+      {/* Frame Shape Panel */}
       <div className="px-4 pb-2">
-        <p className="text-xs text-primary-foreground/60 mb-2 font-medium">Frame Shape</p>
-        <FrameShapeSelector
+        <FrameShapePanel
           selectedShape={selectedFrameShape}
           onSelect={setSelectedFrameShape}
         />
