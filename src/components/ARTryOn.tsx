@@ -1,19 +1,28 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, X, RotateCw, Download, Share2, Upload, Loader2 } from "lucide-react";
+import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
 import GlassesOverlay from "@/components/ar/GlassesOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
+import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import { glassesStyles } from "@/data/glassesStyles";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface ARTryOnProps {
-  product?: any;
+  product?: Tables<"glasses_products">;
   onClose: () => void;
+  useRealProducts?: boolean;
 }
 
-const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
+const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"camera" | "photo">("camera");
+  const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(
+    product || null
+  );
   const [selectedGlassesId, setSelectedGlassesId] = useState(
     product?.frame_style ? `${product.frame_style}-${product.frame_color?.toLowerCase()}` : glassesStyles[0].id
   );
@@ -124,6 +133,48 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
     }
   }, []);
 
+  const addToCart = async () => {
+    if (!selectedProduct) {
+      toast.error("Please select a product first");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Please sign in to add to cart");
+      return;
+    }
+
+    try {
+      const { data: existing } = await supabase
+        .from("cart_items")
+        .select("id, quantity")
+        .eq("user_id", user.id)
+        .eq("product_id", selectedProduct.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("cart_items")
+          .update({ quantity: existing.quantity + 1 })
+          .eq("id", existing.id);
+      } else {
+        await supabase
+          .from("cart_items")
+          .insert({ user_id: user.id, product_id: selectedProduct.id, quantity: 1 });
+      }
+      
+      toast.success(`${selectedProduct.name} added to cart!`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add to cart");
+    }
+  };
+
+  const handleProductSelect = (product: Tables<"glasses_products">) => {
+    setSelectedProduct(product);
+    setSelectedGlassesId(`${product.frame_style}-${product.frame_color.toLowerCase()}`);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in">
       {/* Header */}
@@ -131,7 +182,7 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
         <div className="text-white">
           <h2 className="text-xl font-semibold">Virtual Try-On</h2>
           <p className="text-sm text-white/70">
-            {mode === "camera" ? "Move your head to see different angles" : "Photo mode"}
+            {selectedProduct ? selectedProduct.name : (mode === "camera" ? "Move your head to see different angles" : "Photo mode")}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -205,6 +256,7 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
           videoRef={videoRef}
           selectedGlassesId={selectedGlassesId}
           imageSource={uploadedImage}
+          selectedProduct={selectedProduct}
         />
 
         {/* Face detection indicator */}
@@ -213,6 +265,13 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
             landmarks ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
           }`}>
             {landmarks ? "✓ Face detected" : "○ Looking for face..."}
+          </div>
+        )}
+
+        {/* Selected product price tag */}
+        {selectedProduct && (
+          <div className="absolute top-4 right-4 bg-primary/90 text-primary-foreground px-3 py-1.5 rounded-full text-sm font-bold">
+            ${selectedProduct.price}
           </div>
         )}
 
@@ -228,12 +287,20 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
         )}
       </div>
 
-      {/* Glasses Carousel */}
+      {/* Glasses Carousel - Use real products or demo glasses */}
       <div className="bg-gradient-to-t from-black/90 to-black/60 pt-4 pb-2">
-        <GlassesCarousel
-          selectedId={selectedGlassesId}
-          onSelect={setSelectedGlassesId}
-        />
+        {useRealProducts ? (
+          <ProductGlassesCarousel
+            selectedProductId={selectedProduct?.id || ""}
+            onSelect={handleProductSelect}
+            initialProduct={product}
+          />
+        ) : (
+          <GlassesCarousel
+            selectedId={selectedGlassesId}
+            onSelect={setSelectedGlassesId}
+          />
+        )}
       </div>
 
       {/* Controls */}
@@ -254,7 +321,7 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
                 <Button
                   onClick={capturePhoto}
                   size="lg"
-                  className="rounded-full h-16 w-16 bg-primary hover:bg-primary-hover shadow-elegant"
+                  className="rounded-full h-16 w-16 bg-primary hover:bg-primary/80 shadow-lg"
                   disabled={!landmarks}
                 >
                   <Camera className="h-6 w-6" />
@@ -269,6 +336,16 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
                 >
                   <Camera className="h-4 w-4" />
                   Use Camera
+                </Button>
+              )}
+
+              {selectedProduct && (
+                <Button
+                  onClick={addToCart}
+                  className="gap-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Cart
                 </Button>
               )}
 
@@ -307,6 +384,16 @@ const ARTryOn = ({ product, onClose }: ARTryOnProps) => {
                 <Share2 className="h-4 w-4" />
                 Share
               </Button>
+              {selectedProduct && (
+                <Button
+                  onClick={addToCart}
+                  variant="secondary"
+                  className="gap-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Cart
+                </Button>
+              )}
             </>
           )}
         </div>

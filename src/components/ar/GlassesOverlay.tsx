@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { FaceLandmarks } from "@/hooks/useFaceTracking";
-import { glassesTemplates } from "@/data/glassesStyles";
+import { glassesTemplates, productToGlassesTemplate } from "@/data/glassesStyles";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface GlassesOverlayProps {
   landmarks: FaceLandmarks | null;
@@ -8,6 +9,8 @@ interface GlassesOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   selectedGlassesId: string;
   imageSource?: HTMLImageElement | null;
+  // New prop for database products
+  selectedProduct?: Tables<"glasses_products"> | null;
 }
 
 const GlassesOverlay = ({
@@ -16,6 +19,7 @@ const GlassesOverlay = ({
   videoRef,
   selectedGlassesId,
   imageSource,
+  selectedProduct,
 }: GlassesOverlayProps) => {
   const animationFrameRef = useRef<number>();
 
@@ -43,7 +47,7 @@ const GlassesOverlay = ({
 
       // Draw glasses if landmarks detected
       if (landmarks) {
-        drawGlasses(ctx, landmarks, selectedGlassesId);
+        drawGlasses(ctx, landmarks, selectedGlassesId, selectedProduct);
       }
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -56,15 +60,27 @@ const GlassesOverlay = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [landmarks, canvasRef, videoRef, selectedGlassesId, imageSource]);
+  }, [landmarks, canvasRef, videoRef, selectedGlassesId, imageSource, selectedProduct]);
 
   const drawGlasses = (
     ctx: CanvasRenderingContext2D,
     landmarks: FaceLandmarks,
-    glassesId: string
+    glassesId: string,
+    product?: Tables<"glasses_products"> | null
   ) => {
-    const template = glassesTemplates[glassesId] || glassesTemplates["wayfarer-black"];
-    const { frameColor, lensColor } = template;
+    // Use product colors if available, otherwise fall back to demo templates
+    let frameColor: string;
+    let lensColor: string;
+    
+    if (product) {
+      const template = productToGlassesTemplate(product);
+      frameColor = template.frameColor;
+      lensColor = template.lensColor;
+    } else {
+      const template = glassesTemplates[glassesId] || glassesTemplates["wayfarer-black"];
+      frameColor = template.frameColor;
+      lensColor = template.lensColor;
+    }
 
     // Calculate glasses dimensions based on face landmarks
     // Mirror x coordinates for selfie mode
