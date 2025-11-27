@@ -7,6 +7,7 @@ import RealisticGlassesOverlay from "@/components/ar/RealisticGlassesOverlay";
 import Glasses3DOverlay from "@/components/ar/Glasses3DOverlay";
 import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
+import ARControls, { ARAdjustments, defaultAdjustments } from "@/components/ar/ARControls";
 import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/utils/formatCurrency";
@@ -29,6 +30,8 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   );
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(null);
+  const [arAdjustments, setArAdjustments] = useState<ARAdjustments>(defaultAdjustments);
+  const [showARControls, setShowARControls] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -288,6 +291,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               canvasHeight={canvasHeight}
               selectedProduct={selectedProduct}
               frameStyle={selectedProduct?.frame_style || "wayfarer"}
+              adjustments={arAdjustments}
             />
           ) : (
             <RealisticGlassesOverlay
@@ -299,6 +303,16 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             />
           )}
         </div>
+
+        {/* AR Controls */}
+        {renderMode === "3d" && landmarks && !capturedImage && (
+          <ARControls
+            adjustments={arAdjustments}
+            onChange={setArAdjustments}
+            isVisible={showARControls}
+            onToggle={() => setShowARControls(!showARControls)}
+          />
+        )}
 
         {/* Face detection indicator */}
         {mode === "camera" && !isLoading && !error && (
