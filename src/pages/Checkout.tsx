@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { formatNaira } from "@/utils/formatCurrency";
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -295,7 +296,7 @@ const Checkout = () => {
                           {item.product.name} x{item.quantity}
                         </span>
                         <span className="font-medium">
-                          ${(item.product.price * item.quantity).toFixed(2)}
+                          {formatNaira(item.product.price * item.quantity)}
                         </span>
                       </div>
                     ))}
@@ -304,7 +305,7 @@ const Checkout = () => {
                   <div className="space-y-3 pt-4 border-t">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-medium">${totalPrice.toFixed(2)}</span>
+                      <span className="font-medium">{formatNaira(totalPrice)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Shipping</span>
@@ -312,16 +313,16 @@ const Checkout = () => {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Tax</span>
-                      <span className="font-medium">${(totalPrice * 0.1).toFixed(2)}</span>
+                      <span className="font-medium">{formatNaira(totalPrice * 0.1)}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center text-lg font-bold pt-4 border-t">
                     <span>Total</span>
-                    <span>${(totalPrice * 1.1).toFixed(2)}</span>
+                    <span>{formatNaira(totalPrice * 1.1)}</span>
                   </div>
 
-                  <Button 
+                  <Button
                     type="submit" 
                     className="w-full" 
                     size="lg"

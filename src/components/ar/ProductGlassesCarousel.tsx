@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { formatNaira } from "@/utils/formatCurrency";
 
 interface ProductGlassesCarouselProps {
   selectedProductId: string;
@@ -79,7 +80,7 @@ const ProductGlassesCarousel = ({
               {product.name}
             </span>
             <span className="text-[10px] text-white/60">{product.frame_color}</span>
-            <span className="text-[10px] text-primary font-medium">${product.price}</span>
+            <span className="text-[10px] text-primary font-medium">{formatNaira(product.price)}</span>
           </button>
         ))}
       </div>
