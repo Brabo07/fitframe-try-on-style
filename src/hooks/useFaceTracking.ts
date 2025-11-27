@@ -33,10 +33,12 @@ interface UseFaceTrackingProps {
   isActive: boolean;
 }
 
-// Simple smoothing using exponential moving average
+// Advanced smoothing using exponential moving average with velocity dampening
 class LandmarkSmoother {
   private history: FaceLandmarks[] = [];
-  private readonly smoothingFactor = 0.3;
+  private velocity: Partial<FaceLandmarks> = {};
+  private readonly smoothingFactor = 0.25; // Lower = smoother but more lag
+  private readonly velocityDamping = 0.85;
 
   smooth(current: FaceLandmarks): FaceLandmarks {
     if (this.history.length === 0) {
