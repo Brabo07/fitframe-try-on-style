@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { FaceLandmarks } from "@/hooks/useFaceTracking";
 import { getFrameColorHex } from "@/data/glassesStyles";
 import type { Tables } from "@/integrations/supabase/types";
@@ -11,20 +11,44 @@ interface RealisticGlassesOverlayProps {
   imageSource?: HTMLImageElement | null;
 }
 
-// Frame style configurations for different shapes
-const frameConfigs: Record<string, {
-  lensShape: "rounded" | "rectangular" | "aviator" | "cat-eye" | "round" | "oversized";
-  bridgeStyle: "thin" | "thick" | "double";
-  templeStyle: "standard" | "wide" | "thin";
-}> = {
-  aviator: { lensShape: "aviator", bridgeStyle: "double", templeStyle: "thin" },
-  wayfarer: { lensShape: "rectangular", bridgeStyle: "thick", templeStyle: "wide" },
-  cat_eye: { lensShape: "cat-eye", bridgeStyle: "thin", templeStyle: "standard" },
-  round: { lensShape: "round", bridgeStyle: "thin", templeStyle: "standard" },
-  rectangular: { lensShape: "rectangular", bridgeStyle: "thick", templeStyle: "standard" },
-  oversized: { lensShape: "oversized", bridgeStyle: "thick", templeStyle: "wide" },
-  geometric: { lensShape: "rectangular", bridgeStyle: "thin", templeStyle: "thin" },
+/**
+ * Style-specific calibration multipliers.
+ * These tune the frame width relative to eye distance for realistic fit.
+ * You can tweak per your catalog measurements.
+ */
+const STYLE_SCALE: Record<string, number> = {
+  aviator: 2.20,
+  wayfarer: 2.10,
+  cat_eye: 2.25,
+  round: 2.05,
+  rectangular: 2.10,
+  oversized: 2.40,
+  geometric: 2.10,
+  default: 2.12,
 };
+
+/**
+ * Smoother for position, scale, and rotation to reduce jitter.
+ */
+class PoseSmoother {
+  private prev: { x: number; y: number; w: number; h: number; rot: number } | null = null;
+  constructor(private alpha = 0.25) {}
+  smooth(x: number, y: number, w: number, h: number, rot: number) {
+    if (!this.prev) {
+      this.prev = { x, y, w, h, rot };
+      return this.prev;
+    }
+    const a = this.alpha;
+    this.prev = {
+      x: a * x + (1 - a) * this.prev.x,
+      y: a * y + (1 - a) * this.prev.y,
+      w: a * w + (1 - a) * this.prev.w,
+      h: a * h + (1 - a) * this.prev.h,
+      rot: a * rot + (1 - a) * this.prev.rot,
+    };
+    return this.prev;
+  }
+}
 
 const RealisticGlassesOverlay = ({
   landmarks,
@@ -35,100 +59,44 @@ const RealisticGlassesOverlay = ({
 }: RealisticGlassesOverlayProps) => {
   const animationFrameRef = useRef<number>();
   const [smoothedLandmarks, setSmoothedLandmarks] = useState<FaceLandmarks | null>(null);
-  
-  // Advanced smoothing with velocity tracking
-  const prevLandmarksRef = useRef<FaceLandmarks | null>(null);
-  const velocityRef = useRef<{
-    position: { x: number; y: number };
-    rotation: { pitch: number; yaw: number; roll: number };
-    scale: number;
-  }>({
-    position: { x: 0, y: 0 },
-    rotation: { pitch: 0, yaw: 0, roll: 0 },
-    scale: 0,
-  });
+  const poseSmoother = useMemo(() => new PoseSmoother(0.25), []);
 
-  // Smooth landmarks with velocity-aware interpolation
+  // Velocity-aware smoothing of landmarks from useFaceTracking
+  const prevRef = useRef<FaceLandmarks | null>(null);
   useEffect(() => {
     if (!landmarks) {
       setSmoothedLandmarks(null);
+      prevRef.current = null;
       return;
     }
-
-    const smoothingFactor = 0.25;
-    const velocityDamping = 0.85;
-
-    if (!prevLandmarksRef.current) {
-      prevLandmarksRef.current = landmarks;
+    const sf = 0.25;
+    const prev = prevRef.current;
+    if (!prev) {
+      prevRef.current = landmarks;
       setSmoothedLandmarks(landmarks);
       return;
     }
+    const lerp = (p: { x: number; y: number }, q: { x: number; y: number }) => ({
+      x: prev ? p.x + sf * (q.x - p.x) : q.x,
+      y: prev ? p.y + sf * (q.y - p.y) : q.y,
+    });
 
-    const prev = prevLandmarksRef.current;
-    
-    // Calculate velocity
-    const newVelocity = {
-      position: {
-        x: (landmarks.noseBridge.x - prev.noseBridge.x) * velocityDamping,
-        y: (landmarks.noseBridge.y - prev.noseBridge.y) * velocityDamping,
-      },
-      rotation: {
-        pitch: (landmarks.rotation.pitch - prev.rotation.pitch) * velocityDamping,
-        yaw: (landmarks.rotation.yaw - prev.rotation.yaw) * velocityDamping,
-        roll: (landmarks.rotation.roll - prev.rotation.roll) * velocityDamping,
-      },
-      scale: (landmarks.eyeDistance - prev.eyeDistance) * velocityDamping,
-    };
-    velocityRef.current = newVelocity;
-
-    // Apply smoothing with velocity prediction
-    const sf = smoothingFactor;
     const smoothed: FaceLandmarks = {
-      leftEyeOuter: {
-        x: prev.leftEyeOuter.x + sf * (landmarks.leftEyeOuter.x - prev.leftEyeOuter.x),
-        y: prev.leftEyeOuter.y + sf * (landmarks.leftEyeOuter.y - prev.leftEyeOuter.y),
-      },
-      leftEyeInner: {
-        x: prev.leftEyeInner.x + sf * (landmarks.leftEyeInner.x - prev.leftEyeInner.x),
-        y: prev.leftEyeInner.y + sf * (landmarks.leftEyeInner.y - prev.leftEyeInner.y),
-      },
-      rightEyeOuter: {
-        x: prev.rightEyeOuter.x + sf * (landmarks.rightEyeOuter.x - prev.rightEyeOuter.x),
-        y: prev.rightEyeOuter.y + sf * (landmarks.rightEyeOuter.y - prev.rightEyeOuter.y),
-      },
-      rightEyeInner: {
-        x: prev.rightEyeInner.x + sf * (landmarks.rightEyeInner.x - prev.rightEyeInner.x),
-        y: prev.rightEyeInner.y + sf * (landmarks.rightEyeInner.y - prev.rightEyeInner.y),
-      },
-      leftEyeCenter: {
-        x: prev.leftEyeCenter.x + sf * (landmarks.leftEyeCenter.x - prev.leftEyeCenter.x),
-        y: prev.leftEyeCenter.y + sf * (landmarks.leftEyeCenter.y - prev.leftEyeCenter.y),
-      },
-      rightEyeCenter: {
-        x: prev.rightEyeCenter.x + sf * (landmarks.rightEyeCenter.x - prev.rightEyeCenter.x),
-        y: prev.rightEyeCenter.y + sf * (landmarks.rightEyeCenter.y - prev.rightEyeCenter.y),
-      },
-      noseBridge: {
-        x: prev.noseBridge.x + sf * (landmarks.noseBridge.x - prev.noseBridge.x),
-        y: prev.noseBridge.y + sf * (landmarks.noseBridge.y - prev.noseBridge.y),
-      },
-      noseTop: {
-        x: prev.noseTop.x + sf * (landmarks.noseTop.x - prev.noseTop.x),
-        y: prev.noseTop.y + sf * (landmarks.noseTop.y - prev.noseTop.y),
-      },
+      leftEyeOuter: lerp(prev.leftEyeOuter, landmarks.leftEyeOuter),
+      leftEyeInner: lerp(prev.leftEyeInner, landmarks.leftEyeInner),
+      rightEyeOuter: lerp(prev.rightEyeOuter, landmarks.rightEyeOuter),
+      rightEyeInner: lerp(prev.rightEyeInner, landmarks.rightEyeInner),
+      leftEyeCenter: lerp(prev.leftEyeCenter, landmarks.leftEyeCenter),
+      rightEyeCenter: lerp(prev.rightEyeCenter, landmarks.rightEyeCenter),
+      noseBridge: lerp(prev.noseBridge, landmarks.noseBridge),
+      noseTop: lerp(prev.noseTop, landmarks.noseTop),
       noseTip: {
         x: prev.noseTip.x + sf * (landmarks.noseTip.x - prev.noseTip.x),
         y: prev.noseTip.y + sf * (landmarks.noseTip.y - prev.noseTip.y),
         z: prev.noseTip.z + sf * (landmarks.noseTip.z - prev.noseTip.z),
       },
-      leftTemple: {
-        x: prev.leftTemple.x + sf * (landmarks.leftTemple.x - prev.leftTemple.x),
-        y: prev.leftTemple.y + sf * (landmarks.leftTemple.y - prev.leftTemple.y),
-      },
-      rightTemple: {
-        x: prev.rightTemple.x + sf * (landmarks.rightTemple.x - prev.rightTemple.x),
-        y: prev.rightTemple.y + sf * (landmarks.rightTemple.y - prev.rightTemple.y),
-      },
+      leftTemple: lerp(prev.leftTemple, landmarks.leftTemple),
+      rightTemple: lerp(prev.rightTemple, landmarks.rightTemple),
       faceWidth: prev.faceWidth + sf * (landmarks.faceWidth - prev.faceWidth),
       eyeDistance: prev.eyeDistance + sf * (landmarks.eyeDistance - prev.eyeDistance),
       faceDepth: prev.faceDepth + sf * (landmarks.faceDepth - prev.faceDepth),
@@ -139,403 +107,278 @@ const RealisticGlassesOverlay = ({
       },
     };
 
-    prevLandmarksRef.current = smoothed;
+    prevRef.current = smoothed;
     setSmoothedLandmarks(smoothed);
   }, [landmarks]);
 
   useEffect(() => {
     const render = () => {
-      if (!canvasRef.current) return;
-
       const canvas = canvasRef.current;
+      if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Clear canvas
+      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw video or image
+      // Draw source
       if (imageSource) {
         ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
       } else if (videoRef.current && videoRef.current.readyState >= 2) {
         ctx.save();
-        ctx.scale(-1, 1);
-        ctx.drawImage(videoRef.current, -canvas.width, 0, canvas.width, canvas.height);
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1); // mirror video for front camera UX
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
 
-      // Draw glasses if landmarks detected
+      // Draw glasses
       if (smoothedLandmarks && selectedProduct) {
-        drawRealisticGlasses(ctx, smoothedLandmarks, selectedProduct);
+        drawFittedFrame(ctx, smoothedLandmarks, selectedProduct);
       }
 
       animationFrameRef.current = requestAnimationFrame(render);
     };
 
     render();
-
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, [smoothedLandmarks, canvasRef, videoRef, selectedProduct, imageSource]);
 
-  const drawRealisticGlasses = (
+  function drawFittedFrame(
     ctx: CanvasRenderingContext2D,
-    landmarks: FaceLandmarks,
+    lm: FaceLandmarks,
     product: Tables<"glasses_products">
-  ) => {
-    const canvasWidth = ctx.canvas.width;
-    const mirrorX = (x: number) => canvasWidth - x;
+  ) {
+    const canvasW = ctx.canvas.width;
 
-    // Get mirrored eye positions
-    const leftEyeOuter = { x: mirrorX(landmarks.leftEyeOuter.x), y: landmarks.leftEyeOuter.y };
-    const leftEyeInner = { x: mirrorX(landmarks.leftEyeInner.x), y: landmarks.leftEyeInner.y };
-    const rightEyeOuter = { x: mirrorX(landmarks.rightEyeOuter.x), y: landmarks.rightEyeOuter.y };
-    const rightEyeInner = { x: mirrorX(landmarks.rightEyeInner.x), y: landmarks.rightEyeInner.y };
-    const noseBridge = { x: mirrorX(landmarks.noseBridge.x), y: landmarks.noseBridge.y };
-    const noseTop = { x: mirrorX(landmarks.noseTop.x), y: landmarks.noseTop.y };
+    // Because the background video is mirrored, we mirror X for landmarks to match canvas pixels.
+    const mx = (x: number) => canvasW - x;
 
-    // Calculate eye centers
-    const leftEyeCenter = {
-      x: (leftEyeOuter.x + leftEyeInner.x) / 2,
-      y: (leftEyeOuter.y + leftEyeInner.y) / 2,
-    };
-    const rightEyeCenter = {
-      x: (rightEyeOuter.x + rightEyeInner.x) / 2,
-      y: (rightEyeOuter.y + rightEyeInner.y) / 2,
-    };
+    const leftCenter = { x: mx(lm.leftEyeCenter.x), y: lm.leftEyeCenter.y };
+    const rightCenter = { x: mx(lm.rightEyeCenter.x), y: lm.rightEyeCenter.y };
+    const mid = { x: (leftCenter.x + rightCenter.x) / 2, y: (leftCenter.y + rightCenter.y) / 2 };
 
-    // Calculate dimensions based on face metrics
-    const eyeDistance = landmarks.eyeDistance;
-    const depth = landmarks.faceWidth / 200; // Depth estimation
-    
-    // Scale factor based on face distance from camera
-    const scaleFactor = eyeDistance / 100;
-    
-    // Lens dimensions - adjusted for realistic proportions
-    const lensWidth = eyeDistance * 0.95;
-    const lensHeight = lensWidth * 0.7;
-    const frameThickness = Math.max(4, eyeDistance * 0.08) * scaleFactor;
-    const bridgeWidth = eyeDistance * 0.15;
+    // Eye distance in canvas pixels
+    const eyeDist = Math.hypot(rightCenter.x - leftCenter.x, rightCenter.y - leftCenter.y);
 
-    // Center position between eyes
-    const centerX = (leftEyeCenter.x + rightEyeCenter.x) / 2;
-    const centerY = (leftEyeCenter.y + rightEyeCenter.y) / 2;
-    
-    // Vertical offset - glasses sit slightly below eye center
-    const verticalOffset = lensHeight * 0.15;
+    // Rotation from eye line; roll comes from landmarks (deg → rad)
+    const rollRad = (lm.rotation.roll || 0) * Math.PI / 180;
 
-    // Calculate rotation
-    const roll = landmarks.rotation.roll * (Math.PI / 180);
-    const yaw = landmarks.rotation.yaw;
-    const pitch = landmarks.rotation.pitch;
+    // Calibrated frame width from style
+    const styleKey = (product.frame_style || "default").toLowerCase();
+    const widthMul = STYLE_SCALE[styleKey] ?? STYLE_SCALE.default;
+    const targetW = eyeDist * widthMul;
 
-    // Get frame style configuration
-    const frameStyle = product.frame_style || "rectangular";
-    const config = frameConfigs[frameStyle] || frameConfigs.rectangular;
-    
-    // Get colors
+    // Target height from image aspect if we render an image, else proportion
+    const aspectGuess = 2.0; // typical frame image wider than tall; tune if you load product image
+    const targetH = targetW / aspectGuess;
+
+    // Vertical offset so glasses sit slightly below eye mid
+    const offsetY = targetH * 0.12;
+
+    // Smooth pose
+    const s = poseSmoother.smooth(mid.x, mid.y + offsetY, targetW, targetH, -rollRad);
+
+    // Colors
     const frameColor = getFrameColorHex(product.frame_color);
-    const lensColor = getLensColorForFrame(product.frame_color, config.lensShape);
+    const lensColor = lensTint(product.frame_color);
+
+    // Yaw-based perspective compression
+    const yaw = lm.rotation.yaw || 0;
+    const yawFactor = 1 - Math.min(0.5, Math.abs(yaw) * 0.015);
+    const yawOffset = yaw * 1.0;
+
+    // Lens sizes
+    const lensW = s.w * 0.42 * yawFactor;
+    const lensH = lensW * 0.72;
+    const bridgeGap = s.w * 0.10;
+
+    // Left/right lens centers relative to mid
+    const leftX = -bridgeGap / 2 - lensW / 2 + yawOffset;
+    const rightX = bridgeGap / 2 + lensW / 2 + yawOffset;
+
+    // Frame stroke thickness relative to scale
+    const thickness = Math.max(2, s.w * 0.015);
 
     ctx.save();
-    ctx.translate(centerX, centerY + verticalOffset);
-    ctx.rotate(-roll);
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.rot);
 
-    // Apply perspective based on yaw
-    const yawFactor = 1 - Math.abs(yaw) * 0.015;
-    const yawOffset = yaw * 1.2;
+    // Subtle drop shadow to anchor
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = Math.max(4, s.w * 0.01);
+    ctx.shadowOffsetY = Math.max(2, s.w * 0.005);
 
-    // Calculate lens positions
-    const leftLensX = -eyeDistance * 0.52 + yawOffset;
-    const rightLensX = eyeDistance * 0.52 + yawOffset;
-
-    // Draw shadow for depth
-    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-    ctx.shadowBlur = 8 * scaleFactor;
-    ctx.shadowOffsetY = 4 * scaleFactor;
-
-    // Draw lenses with shape based on frame style
-    drawLens(ctx, leftLensX, 0, lensWidth * yawFactor, lensHeight, config.lensShape, frameColor, lensColor, frameThickness, "left", yaw);
-    drawLens(ctx, rightLensX, 0, lensWidth * yawFactor, lensHeight, config.lensShape, frameColor, lensColor, frameThickness, "right", yaw);
+    // Draw lenses as rounded rects
+    drawLens(ctx, leftX, 0, lensW, lensH, lensColor, frameColor, thickness);
+    drawLens(ctx, rightX, 0, lensW, lensH, lensColor, frameColor, thickness);
 
     // Reset shadow for bridge
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
 
-    // Draw nose bridge with occlusion effect
-    drawBridge(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, config.bridgeStyle, frameColor, frameThickness, yaw);
+    // Bridge
+    drawBridge(ctx, leftX + lensW / 2, rightX - lensW / 2, lensH, frameColor, thickness);
 
-    // Draw nose pads (small circles where glasses rest on nose)
-    drawNosePads(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, frameColor, frameThickness * 0.5, yaw);
+    // Nose pads
+    drawNosePads(ctx, leftX, rightX, lensW, lensH, frameColor, thickness * 0.6);
 
-    // Draw temples (arms)
-    const templeLength = lensWidth * 1.2;
-    drawTemples(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, templeLength, config.templeStyle, frameColor, frameThickness, yawFactor, pitch);
+    // Temples (simple stylized lines)
+    drawTemples(ctx, leftX, rightX, lensW, lensH, s.w, frameColor, thickness, yawFactor);
 
     ctx.restore();
-  };
+  }
 
-  const drawLens = (
+  function drawLens(
     ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    shape: string,
-    frameColor: string,
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
     lensColor: string,
-    thickness: number,
-    side: "left" | "right",
-    yaw: number
-  ) => {
+    frameColor: string,
+    thickness: number
+  ) {
+    const radius = Math.min(w, h) * 0.18;
+
+    // Lens fill with gradient
+    const grad = ctx.createLinearGradient(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
+    grad.addColorStop(0, lensColor);
+    grad.addColorStop(0.6, adjustOpacity(lensColor, 0.75));
+    grad.addColorStop(1, lensColor);
+
     ctx.beginPath();
-
-    const halfW = width / 2;
-    const halfH = height / 2;
-
-    switch (shape) {
-      case "aviator":
-        // Teardrop shape
-        ctx.moveTo(x - halfW * 0.7, y - halfH * 0.8);
-        ctx.quadraticCurveTo(x + halfW * 0.3, y - halfH, x + halfW * 0.8, y - halfH * 0.5);
-        ctx.quadraticCurveTo(x + halfW, y, x + halfW * 0.8, y + halfH * 0.7);
-        ctx.quadraticCurveTo(x, y + halfH, x - halfW * 0.7, y + halfH * 0.7);
-        ctx.quadraticCurveTo(x - halfW, y, x - halfW * 0.7, y - halfH * 0.8);
-        break;
-
-      case "cat-eye":
-        // Upswept corners
-        const catLift = side === "left" ? -halfW * 0.3 : halfW * 0.3;
-        ctx.moveTo(x - halfW, y);
-        ctx.quadraticCurveTo(x - halfW, y - halfH * 0.8, x - halfW * 0.3, y - halfH);
-        ctx.lineTo(x + halfW * 0.3 + catLift * 0.5, y - halfH * 1.2);
-        ctx.quadraticCurveTo(x + halfW + catLift, y - halfH * 0.8, x + halfW, y);
-        ctx.quadraticCurveTo(x + halfW, y + halfH * 0.8, x, y + halfH);
-        ctx.quadraticCurveTo(x - halfW, y + halfH * 0.8, x - halfW, y);
-        break;
-
-      case "round":
-        ctx.arc(x, y, Math.min(halfW, halfH), 0, Math.PI * 2);
-        break;
-
-      case "oversized":
-        // Large rounded rectangle
-        const overRadius = Math.min(halfW, halfH) * 0.4;
-        ctx.roundRect(x - halfW, y - halfH * 1.1, width, height * 1.2, overRadius);
-        break;
-
-      case "rectangular":
-      default:
-        // Slightly rounded rectangle
-        const radius = Math.min(halfW, halfH) * 0.15;
-        ctx.roundRect(x - halfW, y - halfH, width, height, radius);
-        break;
-    }
-
+    // @ts-ignore: roundRect exists in modern Canvas
+    ctx.roundRect(cx - w / 2, cy - h / 2, w, h, radius);
     ctx.closePath();
 
-    // Fill lens with gradient for realism
-    const gradient = ctx.createLinearGradient(x - halfW, y - halfH, x + halfW, y + halfH);
-    gradient.addColorStop(0, lensColor);
-    gradient.addColorStop(0.5, adjustColorOpacity(lensColor, 0.8));
-    gradient.addColorStop(1, lensColor);
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = grad;
     ctx.fill();
 
-    // Add subtle reflection
+    // Reflection highlight
     ctx.save();
-    ctx.globalAlpha = 0.15;
+    ctx.globalAlpha = 0.12;
     ctx.beginPath();
-    const reflectGradient = ctx.createLinearGradient(x - halfW, y - halfH, x - halfW * 0.3, y);
-    reflectGradient.addColorStop(0, "rgba(255, 255, 255, 0.5)");
-    reflectGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-    ctx.fillStyle = reflectGradient;
-    ctx.arc(x - halfW * 0.3, y - halfH * 0.3, halfW * 0.6, 0, Math.PI * 2);
+    ctx.ellipse(cx - w * 0.25, cy - h * 0.25, w * 0.35, h * 0.25, Math.PI / 6, 0, Math.PI * 2);
+    ctx.fillStyle = "white";
     ctx.fill();
     ctx.restore();
 
-    // Draw frame
+    // Frame stroke
     ctx.strokeStyle = frameColor;
     ctx.lineWidth = thickness;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
-  };
+  }
 
-  const drawBridge = (
+  function drawBridge(
     ctx: CanvasRenderingContext2D,
-    leftX: number,
-    rightX: number,
-    lensWidth: number,
-    lensHeight: number,
-    style: string,
+    leftEdgeX: number,
+    rightEdgeX: number,
+    lensH: number,
     color: string,
-    thickness: number,
-    yaw: number
-  ) => {
-    const leftEdge = leftX + lensWidth / 2;
-    const rightEdge = rightX - lensWidth / 2;
-    const bridgeY = -lensHeight * 0.1;
-
+    thickness: number
+  ) {
+    const y = -lensH * 0.12;
     ctx.strokeStyle = color;
     ctx.lineWidth = thickness;
     ctx.lineCap = "round";
 
-    if (style === "double") {
-      // Double bridge (aviator style)
-      ctx.beginPath();
-      ctx.moveTo(leftEdge, bridgeY - thickness);
-      ctx.quadraticCurveTo((leftEdge + rightEdge) / 2, bridgeY - thickness * 2, rightEdge, bridgeY - thickness);
-      ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(leftEdgeX, y);
+    ctx.quadraticCurveTo((leftEdgeX + rightEdgeX) / 2, y - lensH * 0.15, rightEdgeX, y);
+    ctx.stroke();
+  }
 
-      ctx.beginPath();
-      ctx.moveTo(leftEdge, bridgeY + thickness);
-      ctx.quadraticCurveTo((leftEdge + rightEdge) / 2, bridgeY, rightEdge, bridgeY + thickness);
-      ctx.stroke();
-    } else {
-      // Single bridge
-      ctx.beginPath();
-      ctx.moveTo(leftEdge, bridgeY);
-      const curveDepth = style === "thick" ? -lensHeight * 0.15 : -lensHeight * 0.08;
-      ctx.quadraticCurveTo((leftEdge + rightEdge) / 2, bridgeY + curveDepth, rightEdge, bridgeY);
-      ctx.stroke();
-    }
-  };
-
-  const drawNosePads = (
+  function drawNosePads(
     ctx: CanvasRenderingContext2D,
-    leftX: number,
-    rightX: number,
-    lensWidth: number,
-    lensHeight: number,
+    leftCx: number,
+    rightCx: number,
+    lensW: number,
+    lensH: number,
     color: string,
-    size: number,
-    yaw: number
-  ) => {
-    const padY = lensHeight * 0.3;
-    const leftPadX = leftX + lensWidth * 0.35;
-    const rightPadX = rightX - lensWidth * 0.35;
+    size: number
+  ) {
+    const padY = lensH * 0.28;
+    const leftPx = leftCx + lensW * 0.30;
+    const rightPx = rightCx - lensW * 0.30;
 
     ctx.fillStyle = color;
-    
-    // Left pad
     ctx.beginPath();
-    ctx.ellipse(leftPadX, padY, size * 1.5, size, Math.PI / 4, 0, Math.PI * 2);
+    ctx.ellipse(leftPx, padY, size * 1.2, size * 0.9, Math.PI / 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Right pad
     ctx.beginPath();
-    ctx.ellipse(rightPadX, padY, size * 1.5, size, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.ellipse(rightPx, padY, size * 1.2, size * 0.9, -Math.PI / 4, 0, Math.PI * 2);
     ctx.fill();
-  };
+  }
 
-  const drawTemples = (
+  function drawTemples(
     ctx: CanvasRenderingContext2D,
-    leftX: number,
-    rightX: number,
-    lensWidth: number,
-    lensHeight: number,
-    templeLength: number,
-    style: string,
+    leftCx: number,
+    rightCx: number,
+    lensW: number,
+    lensH: number,
+    frameW: number,
     color: string,
     thickness: number,
-    yawFactor: number,
-    pitch: number
-  ) => {
-    const templeY = -lensHeight * 0.2;
-    const leftStartX = leftX - lensWidth / 2;
-    const rightStartX = rightX + lensWidth / 2;
+    yawFactor: number
+  ) {
+    const y = -lensH * 0.20;
+    const leftStartX = leftCx - lensW / 2;
+    const rightStartX = rightCx + lensW / 2;
 
-    // Adjust temple visibility based on yaw
-    const leftOpacity = Math.max(0.3, 1 - Math.max(0, -pitch * 0.02));
-    const rightOpacity = Math.max(0.3, 1 - Math.max(0, pitch * 0.02));
+    const templeLen = frameW * 0.55 * yawFactor;
+    const templeWidth = thickness * 0.9;
 
-    const templeWidth = style === "wide" ? thickness * 1.5 : style === "thin" ? thickness * 0.6 : thickness;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = templeWidth;
+    ctx.lineCap = "round";
 
     // Left temple
-    ctx.save();
-    ctx.globalAlpha = leftOpacity;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = templeWidth;
-    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(leftStartX, templeY);
-    ctx.lineTo(leftStartX - templeLength * yawFactor, templeY + templeLength * 0.1);
+    ctx.moveTo(leftStartX, y);
+    ctx.lineTo(leftStartX - templeLen, y + templeLen * 0.08);
     ctx.stroke();
-    
-    // Temple tip curl
-    ctx.beginPath();
-    ctx.moveTo(leftStartX - templeLength * yawFactor, templeY + templeLength * 0.1);
-    ctx.quadraticCurveTo(
-      leftStartX - templeLength * yawFactor - 5,
-      templeY + templeLength * 0.2,
-      leftStartX - templeLength * yawFactor,
-      templeY + templeLength * 0.3
-    );
-    ctx.stroke();
-    ctx.restore();
 
     // Right temple
-    ctx.save();
-    ctx.globalAlpha = rightOpacity;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = templeWidth;
-    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(rightStartX, templeY);
-    ctx.lineTo(rightStartX + templeLength * yawFactor, templeY + templeLength * 0.1);
+    ctx.moveTo(rightStartX, y);
+    ctx.lineTo(rightStartX + templeLen, y + templeLen * 0.08);
     ctx.stroke();
+  }
 
-    // Temple tip curl
-    ctx.beginPath();
-    ctx.moveTo(rightStartX + templeLength * yawFactor, templeY + templeLength * 0.1);
-    ctx.quadraticCurveTo(
-      rightStartX + templeLength * yawFactor + 5,
-      templeY + templeLength * 0.2,
-      rightStartX + templeLength * yawFactor,
-      templeY + templeLength * 0.3
-    );
-    ctx.stroke();
-    ctx.restore();
-  };
+  function lensTint(frameColor: string) {
+    const base: Record<string, string> = {
+      gold: "rgba(139, 90, 43, 0.28)",
+      black: "rgba(20, 20, 20, 0.40)",
+      tortoise: "rgba(139, 69, 19, 0.30)",
+      brown: "rgba(101, 67, 33, 0.30)",
+      pink: "rgba(255, 182, 193, 0.25)",
+      silver: "rgba(120, 120, 120, 0.30)",
+      blue: "rgba(65, 105, 225, 0.28)",
+      red: "rgba(139, 0, 0, 0.28)",
+      white: "rgba(220, 220, 220, 0.20)",
+      green: "rgba(34, 139, 34, 0.28)",
+      purple: "rgba(128, 0, 128, 0.28)",
+    };
+    const key = (frameColor || "").toLowerCase();
+    return base[key] || "rgba(30, 30, 30, 0.32)";
+  }
+
+  function adjustOpacity(rgba: string, factor: number) {
+    const m = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (!m) return rgba;
+    const [_, r, g, b, a] = m;
+    const alpha = Math.max(0, Math.min(1, (a ? parseFloat(a) : 1) * factor));
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
 
   return null;
-};
-
-// Helper functions
-const getLensColorForFrame = (color: string, shape: string): string => {
-  const baseColors: Record<string, string> = {
-    gold: "rgba(139, 90, 43, 0.35)",
-    black: "rgba(20, 20, 20, 0.45)",
-    tortoise: "rgba(139, 69, 19, 0.35)",
-    brown: "rgba(101, 67, 33, 0.35)",
-    pink: "rgba(255, 182, 193, 0.3)",
-    silver: "rgba(100, 100, 100, 0.35)",
-    blue: "rgba(65, 105, 225, 0.35)",
-    red: "rgba(139, 0, 0, 0.35)",
-    white: "rgba(200, 200, 200, 0.25)",
-    green: "rgba(34, 139, 34, 0.35)",
-    purple: "rgba(128, 0, 128, 0.35)",
-  };
-
-  const normalizedColor = color.toLowerCase();
-  return baseColors[normalizedColor] || "rgba(30, 30, 30, 0.4)";
-};
-
-const adjustColorOpacity = (color: string, factor: number): string => {
-  const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-  if (match) {
-    const r = match[1];
-    const g = match[2];
-    const b = match[3];
-    const a = parseFloat(match[4] || "1") * factor;
-    return `rgba(${r}, ${g}, ${b}, ${a})`;
-  }
-  return color;
 };
 
 export default RealisticGlassesOverlay;
