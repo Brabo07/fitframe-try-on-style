@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Camera, Upload, Sparkles, ArrowRight, Loader2 } from "lucide-react";
+import { Camera, Sparkles, ArrowRight, Loader2, Video, CircleDot, Check } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
 import { formatNaira } from "@/utils/formatCurrency";
-
 import { Database } from "@/integrations/supabase/types";
 
 type FrameStyle = Database["public"]["Enums"]["frame_style"];
@@ -41,68 +40,136 @@ const faceShapeInfo: Record<string, { description: string; recommendedStyles: Fr
 };
 
 const FaceShapeAnalysis = () => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [faceShape, setFaceShape] = useState<string | null>(null);
   const [recommendedProducts, setRecommendedProducts] = useState<Tables<"glasses_products">[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [step, setStep] = useState<'intro' | 'camera' | 'analyzing' | 'results'>('intro');
+  const [countdown, setCountdown] = useState<number | null>(null);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     document.title = "Face Shape Assistant - FitFrame";
+    return () => {
+      stopCamera();
+    };
   }, []);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage(e.target?.result as string);
-        setFaceShape(null);
-        setRecommendedProducts([]);
-      };
-      reader.readAsDataURL(file);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      
+      setCameraActive(true);
+      setStep('camera');
+      setFaceShape(null);
+      setCapturedImage(null);
+      setRecommendedProducts([]);
+      
+    } catch (error: any) {
+      console.error("Camera error:", error);
+      toast({
+        title: "Camera Access Required",
+        description: "Please allow camera access to analyze your face shape.",
+        variant: "destructive"
+      });
     }
   };
 
-  const analyzeImage = async () => {
-    if (!selectedImage) return;
-
-    setAnalyzing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('analyze-face-shape', {
-        body: { image: selectedImage }
-      });
-
-      if (error) throw error;
-
-      const detectedShape = data.faceShape;
-      setFaceShape(detectedShape);
-
-      // Fetch recommended products based on face shape
-      const recommendedStyles = faceShapeInfo[detectedShape]?.recommendedStyles || [];
-      const { data: products } = await supabase
-        .from('glasses_products')
-        .select('*')
-        .eq('in_stock', true)
-        .in('frame_style', recommendedStyles)
-        .limit(6);
-
-      setRecommendedProducts(products || []);
-
-      toast({
-        title: "Analysis Complete!",
-        description: `Your face shape appears to be ${detectedShape}.`
-      });
-    } catch (error: any) {
-      console.error("Analysis error:", error);
-      toast({
-        title: "Analysis failed",
-        description: error.message || "Please try again with a clearer photo.",
-        variant: "destructive"
-      });
-    } finally {
-      setAnalyzing(false);
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
+    setCameraActive(false);
+  };
+
+  const captureAndAnalyze = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    // Start countdown
+    setCountdown(3);
+    
+    for (let i = 3; i > 0; i--) {
+      setCountdown(i);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    setCountdown(null);
+    setStep('analyzing');
+    setAnalyzing(true);
+
+    // Capture frame
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      setCapturedImage(imageData);
+      
+      stopCamera();
+
+      try {
+        const { data, error } = await supabase.functions.invoke('analyze-face-shape', {
+          body: { image: imageData }
+        });
+
+        if (error) throw error;
+
+        const detectedShape = data.faceShape;
+        setFaceShape(detectedShape);
+        setStep('results');
+
+        // Fetch recommended products based on face shape
+        const recommendedStyles = faceShapeInfo[detectedShape]?.recommendedStyles || [];
+        const { data: products } = await supabase
+          .from('glasses_products')
+          .select('*')
+          .eq('in_stock', true)
+          .in('frame_style', recommendedStyles)
+          .limit(6);
+
+        setRecommendedProducts(products || []);
+
+        toast({
+          title: "Analysis Complete!",
+          description: `Your face shape appears to be ${detectedShape}.`
+        });
+      } catch (error: any) {
+        console.error("Analysis error:", error);
+        setStep('intro');
+        toast({
+          title: "Analysis failed",
+          description: error.message || "Please try again with better lighting.",
+          variant: "destructive"
+        });
+      } finally {
+        setAnalyzing(false);
+      }
+    }
+  }, []);
+
+  const resetAnalysis = () => {
+    setStep('intro');
+    setFaceShape(null);
+    setCapturedImage(null);
+    setRecommendedProducts([]);
+    stopCamera();
   };
 
   return (
@@ -111,7 +178,7 @@ const FaceShapeAnalysis = () => {
       
       <main className="container px-4 py-8 md:py-12">
         {/* Hero Section */}
-        <div className="text-center max-w-3xl mx-auto mb-12 animate-fade-in-up">
+        <div className="text-center max-w-3xl mx-auto mb-12 animate-fade-in">
           <div className="inline-flex p-3 rounded-full bg-primary/10 mb-4">
             <Sparkles className="h-8 w-8 text-primary" />
           </div>
@@ -119,85 +186,171 @@ const FaceShapeAnalysis = () => {
             Face Shape Assistant
           </h1>
           <p className="text-lg text-muted-foreground">
-            Upload a photo and our AI will analyze your face shape to recommend the perfect frames for you.
+            {step === 'intro' && "Let our AI analyze your face shape and recommend the perfect frames."}
+            {step === 'camera' && "Position your face in the center and hold still."}
+            {step === 'analyzing' && "Analyzing your facial features..."}
+            {step === 'results' && "Here are your personalized recommendations!"}
           </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-          {/* Upload Section */}
-          <Card className="card-premium animate-fade-in-up stagger-1">
+          {/* Camera Section */}
+          <Card className="card-premium animate-fade-in overflow-hidden">
             <CardHeader>
-              <CardTitle>Upload Your Photo</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                {step === 'camera' && <CircleDot className="h-5 w-5 text-red-500 animate-pulse" />}
+                {step === 'results' && <Check className="h-5 w-5 text-green-500" />}
+                {step === 'intro' ? 'Start Analysis' : step === 'camera' ? 'Live Camera' : step === 'analyzing' ? 'Processing...' : 'Captured Photo'}
+              </CardTitle>
               <CardDescription>
-                For best results, use a front-facing photo with good lighting
+                {step === 'intro' && "Click below to open your camera and analyze your face shape instantly."}
+                {step === 'camera' && "Look directly at the camera with good lighting. We'll capture automatically."}
+                {step === 'analyzing' && "Please wait while we analyze your facial features."}
+                {step === 'results' && "Analysis complete! See your results on the right."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className={`relative aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden ${
-                  selectedImage 
-                    ? "border-primary bg-muted" 
-                    : "border-border hover:border-primary hover:bg-muted/50"
-                }`}
-              >
-                {selectedImage ? (
+              <div className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-accent/5 border border-border/50">
+                {/* Video element for live camera */}
+                <video
+                  ref={videoRef}
+                  className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                
+                {/* Canvas for capturing (hidden) */}
+                <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Captured image display */}
+                {capturedImage && !cameraActive && (
                   <img 
-                    src={selectedImage} 
-                    alt="Your photo" 
+                    src={capturedImage} 
+                    alt="Captured" 
                     className="w-full h-full object-cover"
                   />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                    <div className="p-4 rounded-full bg-muted">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
+                )}
+                
+                {/* Intro state */}
+                {step === 'intro' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6">
+                    <div className="p-6 rounded-full bg-primary/10 animate-pulse">
+                      <Camera className="h-12 w-12 text-primary" />
                     </div>
-                    <div className="text-center">
-                      <p className="font-medium">Click to upload</p>
-                      <p className="text-sm text-muted-foreground">or drag and drop</p>
+                    <div className="text-center space-y-2">
+                      <p className="font-semibold text-lg">Ready to Begin</p>
+                      <p className="text-sm text-muted-foreground max-w-xs">
+                        Click the button below to open your camera and start the face shape analysis.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Countdown overlay */}
+                {countdown !== null && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-primary/20 backdrop-blur-sm">
+                    <div className="text-8xl font-bold text-white animate-pulse drop-shadow-lg">
+                      {countdown}
+                    </div>
+                  </div>
+                )}
+
+                {/* Analyzing overlay */}
+                {step === 'analyzing' && !countdown && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary/20 backdrop-blur-sm gap-4">
+                    <Loader2 className="h-16 w-16 text-white animate-spin" />
+                    <p className="text-white font-semibold text-lg">Analyzing your face shape...</p>
+                  </div>
+                )}
+
+                {/* Face guide overlay for camera */}
+                {cameraActive && countdown === null && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute inset-8 md:inset-16 border-4 border-dashed border-white/50 rounded-full" />
+                    <div className="absolute bottom-4 left-0 right-0 text-center">
+                      <p className="text-white bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full inline-block text-sm font-medium">
+                        Position your face inside the circle
+                      </p>
                     </div>
                   </div>
                 )}
               </div>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
 
-              <Button 
-                onClick={analyzeImage}
-                disabled={!selectedImage || analyzing}
-                className="w-full hover-lift"
-                size="lg"
-              >
-                {analyzing ? (
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                {step === 'intro' && (
+                  <Button 
+                    onClick={startCamera}
+                    className="w-full hover-lift"
+                    size="lg"
+                  >
+                    <Video className="h-5 w-5 mr-2" />
+                    Open Camera
+                  </Button>
+                )}
+
+                {step === 'camera' && (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-4 w-4 mr-2" />
-                    Analyze My Face Shape
+                    <Button 
+                      onClick={captureAndAnalyze}
+                      disabled={analyzing}
+                      className="flex-1 hover-lift"
+                      size="lg"
+                    >
+                      <Camera className="h-5 w-5 mr-2" />
+                      Capture & Analyze
+                    </Button>
+                    <Button 
+                      onClick={stopCamera}
+                      variant="outline"
+                      size="lg"
+                    >
+                      Cancel
+                    </Button>
                   </>
                 )}
-              </Button>
+
+                {step === 'results' && (
+                  <Button 
+                    onClick={resetAnalysis}
+                    variant="outline"
+                    className="w-full"
+                    size="lg"
+                  >
+                    <Camera className="h-5 w-5 mr-2" />
+                    Try Again
+                  </Button>
+                )}
+              </div>
+
+              {/* Onboarding tips */}
+              {(step === 'intro' || step === 'camera') && (
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  {[
+                    { icon: "💡", text: "Good lighting" },
+                    { icon: "👤", text: "Face the camera" },
+                    { icon: "🎯", text: "Stay centered" }
+                  ].map((tip, i) => (
+                    <div key={i} className="text-center p-3 rounded-xl bg-muted/50">
+                      <span className="text-2xl mb-1 block">{tip.icon}</span>
+                      <span className="text-xs text-muted-foreground">{tip.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Results Section */}
-          <div className="space-y-6 animate-fade-in-up stagger-2">
+          <div className="space-y-6 animate-fade-in">
             {faceShape ? (
               <>
                 <Card className="card-premium">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-primary" />
-                      Your Face Shape: <span className="text-primary capitalize">{faceShape}</span>
+                      <Sparkles className="h-5 w-5 text-accent" />
+                      Your Face Shape: <span className="text-accent capitalize">{faceShape}</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -229,7 +382,7 @@ const FaceShapeAnalysis = () => {
                             </div>
                             <CardContent className="p-3">
                               <p className="font-medium text-sm truncate">{product.name}</p>
-                              <p className="text-primary font-semibold">{formatNaira(product.price)}</p>
+                              <p className="text-accent font-semibold">{formatNaira(product.price)}</p>
                             </CardContent>
                           </Card>
                         </Link>
@@ -246,14 +399,28 @@ const FaceShapeAnalysis = () => {
               </>
             ) : (
               <Card className="card-premium h-full flex items-center justify-center min-h-[400px]">
-                <CardContent className="text-center">
+                <CardContent className="text-center p-8">
                   <div className="p-4 rounded-full bg-muted inline-block mb-4">
                     <Sparkles className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-medium mb-2">Ready to Analyze</h3>
-                  <p className="text-muted-foreground">
-                    Upload a photo to discover your face shape and get personalized frame recommendations.
+                  <p className="text-muted-foreground mb-6">
+                    Open your camera to discover your face shape and get personalized frame recommendations.
                   </p>
+                  <div className="space-y-3 text-left max-w-xs mx-auto">
+                    {[
+                      "AI analyzes your facial features",
+                      "Identifies your unique face shape",
+                      "Recommends perfect frame styles"
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-bold">
+                          {i + 1}
+                        </div>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}

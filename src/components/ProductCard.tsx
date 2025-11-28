@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Camera, ShoppingCart, Play } from "lucide-react";
+import { Heart, Camera, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import ARTryOn from "@/components/ARTryOn";
 import { formatNaira } from "@/utils/formatCurrency";
@@ -13,17 +13,11 @@ interface ProductCardProps {
   product: Tables<"glasses_products">;
 }
 
-// Placeholder videos for product motion previews
-const productVideos: Record<string, string> = {
-  default: "https://videos.pexels.com/video-files/5699838/5699838-sd_360_640_25fps.mp4"
-};
-
 const ProductCard = ({ product }: ProductCardProps) => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showARTryOn, setShowARTryOn] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const checkFavorite = async () => {
@@ -43,17 +37,6 @@ const ProductCard = ({ product }: ProductCardProps) => {
     };
     checkFavorite();
   }, [product.id]);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      if (isHovered) {
-        videoRef.current.play().catch(() => {});
-      } else {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      }
-    }
-  }, [isHovered]);
 
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -129,46 +112,61 @@ const ProductCard = ({ product }: ProductCardProps) => {
     <>
       <Link to={`/product/${product.id}`}>
         <Card 
-          className="overflow-hidden transition-all duration-300 group border-accent/10 rounded-2xl shadow-card hover:shadow-hover hover:-translate-y-1"
+          className={`
+            overflow-hidden border-border/30 rounded-2xl bg-card
+            transition-all duration-500 ease-out
+            ${isHovered 
+              ? 'shadow-[0_20px_50px_-12px_hsl(var(--primary)/0.25)] -translate-y-2 scale-[1.02]' 
+              : 'shadow-card hover:shadow-hover'
+            }
+          `}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative aspect-square overflow-hidden bg-muted/50">
-            {/* Video preview on hover */}
-            <video
-              ref={videoRef}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-                isHovered ? "opacity-100" : "opacity-0"
-              }`}
-              src={productVideos.default}
-              muted
-              loop
-              playsInline
-            />
-            
-            {/* Static image */}
+          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-muted/30 to-muted/60">
+            {/* Product image with subtle motion effects */}
             <img
               src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
               alt={product.name}
-              className={`w-full h-full object-cover transition-all duration-500 ${
-                isHovered ? "opacity-0 scale-110" : "opacity-100"
-              }`}
+              className={`
+                w-full h-full object-cover
+                transition-all duration-700 ease-out
+                ${isHovered ? 'scale-110' : 'scale-100'}
+              `}
+            />
+            
+            {/* Subtle glow overlay on hover */}
+            <div 
+              className={`
+                absolute inset-0 pointer-events-none
+                bg-gradient-to-t from-primary/10 via-transparent to-accent/5
+                transition-opacity duration-500
+                ${isHovered ? 'opacity-100' : 'opacity-0'}
+              `}
             />
 
-            {/* Play indicator */}
-            <div className={`absolute bottom-3 left-3 flex items-center gap-1 bg-primary/90 text-primary-foreground backdrop-blur-sm px-3 py-1.5 rounded-xl text-xs font-semibold transition-opacity duration-300 ${
-              isHovered ? "opacity-100" : "opacity-0"
-            }`}>
-              <Play className="h-3 w-3 fill-current" />
-              Preview
-            </div>
+            {/* Elegant shine effect on hover */}
+            <div 
+              className={`
+                absolute inset-0 pointer-events-none
+                bg-gradient-to-br from-white/20 via-transparent to-transparent
+                transition-all duration-700 ease-out
+                ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-full'}
+              `}
+            />
 
-            {/* Action buttons */}
-            <div className="absolute top-3 right-3 flex gap-2">
+            {/* Action buttons with smooth entrance */}
+            <div 
+              className={`
+                absolute top-3 right-3 flex gap-2
+                transition-all duration-300 ease-out
+                ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
+              `}
+            >
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/95 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground rounded-xl transition-all duration-300"
+                className="bg-background/95 backdrop-blur-md hover:bg-accent hover:text-accent-foreground rounded-xl shadow-lg transition-all duration-300 hover:scale-110"
                 onClick={handleTryOn}
               >
                 <Camera className="h-5 w-5" />
@@ -176,26 +174,42 @@ const ProductCard = ({ product }: ProductCardProps) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/95 backdrop-blur-sm hover:bg-accent hover:text-accent-foreground rounded-xl transition-all duration-300"
+                className="bg-background/95 backdrop-blur-md hover:bg-accent hover:text-accent-foreground rounded-xl shadow-lg transition-all duration-300 hover:scale-110"
                 onClick={toggleFavorite}
               >
                 <Heart
-                  className={`h-5 w-5 transition-all duration-300 ${isFavorite ? "fill-accent text-accent" : ""}`}
+                  className={`h-5 w-5 transition-all duration-300 ${isFavorite ? "fill-accent text-accent scale-110" : ""}`}
                 />
               </Button>
             </div>
+
+            {/* Frame style badge */}
+            <div 
+              className={`
+                absolute bottom-3 left-3
+                bg-primary/90 text-primary-foreground backdrop-blur-md
+                px-3 py-1.5 rounded-xl text-xs font-semibold
+                transition-all duration-500 ease-out
+                ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}
+              `}
+            >
+              {product.frame_style?.replace('_', ' ')}
+            </div>
           </div>
+          
           <CardContent className="p-4 space-y-3">
-            <div>
-              <h3 className="font-bold text-base line-clamp-1 text-primary">{product.name}</h3>
+            <div className={`transition-all duration-300 ${isHovered ? 'translate-x-1' : ''}`}>
+              <h3 className="font-bold text-base line-clamp-1 text-foreground">{product.name}</h3>
               <p className="text-sm text-muted-foreground">{product.brand}</p>
             </div>
             <div className="flex items-center justify-between">
-              <p className="text-lg font-bold text-accent">{formatNaira(product.price)}</p>
+              <p className={`text-lg font-bold text-accent transition-all duration-300 ${isHovered ? 'scale-105' : ''}`}>
+                {formatNaira(product.price)}
+              </p>
               <Button
                 size="sm"
                 variant="secondary"
-                className="rounded-lg"
+                className={`rounded-lg transition-all duration-300 ${isHovered ? 'shadow-md' : ''}`}
                 onClick={handleAddToCart}
               >
                 <ShoppingCart className="h-4 w-4 mr-1" />
@@ -205,7 +219,12 @@ const ProductCard = ({ product }: ProductCardProps) => {
             <Button
               variant="outline"
               size="sm"
-              className="w-full rounded-xl border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
+              className={`
+                w-full rounded-xl border-primary/30 text-primary 
+                hover:bg-primary hover:text-primary-foreground
+                transition-all duration-300
+                ${isHovered ? 'bg-primary/5 border-primary/50' : ''}
+              `}
               onClick={handleTryOn}
             >
               <Camera className="h-4 w-4 mr-2" />
