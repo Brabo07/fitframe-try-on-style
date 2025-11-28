@@ -1,180 +1,487 @@
-import { useState, useEffect } from "react";
-import Header from "@/components/Header";
-import ARTryOn from "@/components/ARTryOn";
+// src/components/ARTryOn.tsx
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Camera, Glasses, Sparkles, ArrowRight, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart, Box, Layers } from "lucide-react";
+import { toast } from "sonner";
+import { useFaceTracking } from "@/hooks/useFaceTracking";
+import RealisticGlassesOverlay from "@/components/ar/RealisticGlassesOverlay";
+import Glasses3DOverlay from "@/components/ar/Glasses3DOverlay";
+import GlassesCarousel from "@/components/ar/GlassesCarousel";
+import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
+import ARControls, { ARAdjustments, defaultAdjustments } from "@/components/ar/ARControls";
+import FrameShapePanel, { FrameShape } from "@/components/ar/FrameShapePanel";
+import LensColorSelector, { LensColor } from "@/components/ar/LensColorSelector";
+import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/utils/formatCurrency";
 import type { Tables } from "@/integrations/supabase/types";
 
-const TryOn = () => {
-  const [showARTryOn, setShowARTryOn] = useState(false);
-  const [products, setProducts] = useState<Tables<"glasses_products">[]>([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+interface ARTryOnProps {
+  product?: Tables<"glasses_products">;
+  onClose: () => void;
+  useRealProducts?: boolean;
+}
 
+type SourceMode = "camera" | "photo";
+type RenderMode = "3d" | "2d";
+
+const TARGET_WIDTH = 1280;
+const TARGET_HEIGHT = 720;
+
+function computeCoverDrawRect(
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number
+) {
+  // Similar to CSS object-fit: cover for drawing into canvas
+  const srcAspect = srcW / srcH;
+  const dstAspect = dstW / dstH;
+
+  let drawW = dstW;
+  let drawH = dstH;
+  if (srcAspect > dstAspect) {
+    // Source is wider -> height fits, width overflows
+    drawH = dstH;
+    drawW = srcAspect * drawH;
+  } else {
+    // Source is taller -> width fits, height overflows
+    drawW = dstW;
+    drawH = drawW / srcAspect;
+  }
+  const offsetX = (dstW - drawW) / 2;
+  const offsetY = (dstH - drawH) / 2;
+  return { drawW, drawH, offsetX, offsetY };
+}
+
+const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => {
+  const [mode, setMode] = useState<SourceMode>("camera");
+  const [renderMode, setRenderMode] = useState<RenderMode>("3d");
+  const [selectedFrameShape, setSelectedFrameShape] = useState<FrameShape>(
+    (product?.frame_style as FrameShape) || "aviator"
+  );
+  const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(product || null);
+  const [selectedGlassesId, setSelectedGlassesId] = useState(
+    product?.frame_style ? `${product.frame_style}-${product.frame_color?.toLowerCase()}` : glassesStyles[0].id
+  );
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(null);
+  const [arAdjustments, setArAdjustments] = useState<ARAdjustments>(defaultAdjustments);
+  const [showARControls, setShowARControls] = useState(false);
+  const [selectedLensColor, setSelectedLensColor] = useState<LensColor>("clear");
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Face tracking hook; ensure it uses the same canvas coordinates we draw into
+  const { landmarks, isLoading, error, fps } = useFaceTracking({
+    videoRef,
+    canvasRef,
+    isActive: mode === "camera" && !capturedImage,
+  });
+
+  // Ensure canvas has deterministic size
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("glasses_products")
-          .select("*")
-          .eq("in_stock", true)
-          .limit(4);
-        
-        if (error) throw error;
-        setProducts(data || []);
-      } catch (error) {
-        console.error("Error fetching products:", error);
-      } finally {
-        setLoading(false);
+    if (canvasRef.current) {
+      canvasRef.current.width = TARGET_WIDTH;
+      canvasRef.current.height = TARGET_HEIGHT;
+    }
+  }, []);
+
+  // Draw loop to render video or uploaded photo into canvas consistently
+  // while face tracking runs. This ensures overlays use the same coordinate space.
+  useEffect(() => {
+    let rafId = 0;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+
+    const draw = () => {
+      if (!canvas || !ctx) {
+        rafId = requestAnimationFrame(draw);
+        return;
       }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (mode === "camera" && videoRef.current && !capturedImage) {
+        const v = videoRef.current;
+        const vw = v.videoWidth || TARGET_WIDTH;
+        const vh = v.videoHeight || TARGET_HEIGHT;
+
+        // Apply object-fit: cover math
+        const { drawW, drawH, offsetX, offsetY } = computeCoverDrawRect(vw, vh, canvas.width, canvas.height);
+
+        // Mirror horizontally for front camera UX
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+
+        // Draw video
+        ctx.drawImage(v, offsetX, offsetY, drawW, drawH);
+
+        ctx.restore();
+      } else if (mode === "photo" && uploadedImage && !capturedImage) {
+        const img = uploadedImage;
+        const { drawW, drawH, offsetX, offsetY } = computeCoverDrawRect(img.width, img.height, canvas.width, canvas.height);
+        ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+      }
+
+      rafId = requestAnimationFrame(draw);
     };
 
-    fetchProducts();
+    rafId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafId);
+  }, [mode, uploadedImage, capturedImage]);
+
+  const capturePhoto = useCallback(() => {
+    if (!canvasRef.current) return;
+    const imageData = canvasRef.current.toDataURL("image/png");
+    setCapturedImage(imageData);
+    toast.success("Photo captured!");
   }, []);
 
-  const features = [
-    {
-      icon: Camera,
-      title: "Real-Time Tracking",
-      description: "Advanced face tracking follows your movements smoothly at 30-60 FPS",
-    },
-    {
-      icon: Glasses,
-      title: "Real Products",
-      description: "Try on actual frames from our store catalog before you buy",
-    },
-    {
-      icon: Sparkles,
-      title: "Photo Mode",
-      description: "Upload a photo or capture a snapshot to save and share",
-    },
-  ];
-
-  useEffect(() => {
-    document.title = "Virtual Try-On | FitFrame";
+  const retakePhoto = useCallback(() => {
+    setCapturedImage(null);
+    setUploadedImage(null);
+    setMode("camera");
   }, []);
+
+  const downloadPhoto = useCallback(() => {
+    if (!capturedImage && !canvasRef.current) return;
+    const imageData = capturedImage || canvasRef.current?.toDataURL("image/png");
+    if (!imageData) return;
+
+    const link = document.createElement("a");
+    link.href = imageData;
+    link.download = `fitframe-tryon-${Date.now()}.png`;
+    link.click();
+    toast.success("Photo downloaded!");
+  }, [capturedImage]);
+
+  const sharePhoto = async () => {
+    const imageData = capturedImage || canvasRef.current?.toDataURL("image/png");
+    if (!imageData) return;
+
+    try {
+      const blob = await (await fetch(imageData)).blob();
+      const file = new File([blob], `fitframe-tryon.png`, { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "FitFrame Virtual Try-On",
+          text: "Check out my virtual try-on!",
+        });
+        toast.success("Shared successfully!");
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.info("Link copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+      toast.error("Unable to share. Try downloading instead.");
+    }
+  };
+
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = () => {
+      setUploadedImage(img);
+      setMode("photo");
+      // Canvas stays at TARGET dims; draw loop uses cover math
+    };
+    img.src = URL.createObjectURL(file);
+    toast.success("Photo uploaded! Face tracking will analyze the image.");
+  }, []);
+
+  const switchToCamera = useCallback(() => {
+    setUploadedImage(null);
+    setCapturedImage(null);
+    setMode("camera");
+  }, []);
+
+  const addToCart = async () => {
+    if (!selectedProduct) {
+      toast.error("Please select a product first");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Please sign in to add to cart");
+      return;
+    }
+
+    try {
+      const { data: existing } = await supabase
+        .from("cart_items")
+        .select("id, quantity")
+        .eq("user_id", user.id)
+        .eq("product_id", selectedProduct.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("cart_items")
+          .update({ quantity: existing.quantity + 1 })
+          .eq("id", existing.id);
+      } else {
+        await supabase
+          .from("cart_items")
+          .insert({ user_id: user.id, product_id: selectedProduct.id, quantity: 1 });
+      }
+      
+      toast.success(`${selectedProduct.name} added to cart!`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add to cart");
+    }
+  };
+
+  const handleProductSelect = (p: Tables<"glasses_products">) => {
+    setSelectedProduct(p);
+    setSelectedGlassesId(`${p.frame_style}-${p.frame_color.toLowerCase()}`);
+  };
+
+  const canvasWidth = canvasRef.current?.width || TARGET_WIDTH;
+  const canvasHeight = canvasRef.current?.height || TARGET_HEIGHT;
 
   return (
-    <div className="min-h-screen bg-background">
-        <Header />
-        
-        <main className="container py-8 px-4">
-          {/* Hero Section */}
-          <section className="text-center mb-12 animate-fade-in-up">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-primary">
-              Virtual Try-On Experience
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-              See how glasses look on you in real-time using our advanced AR technology.
-              Try on real products from our store - no downloads required.
-            </p>
-            <Button
-              size="lg"
-              variant="premium"
-              onClick={() => setShowARTryOn(true)}
-              className="gap-2 text-lg px-8 py-6 rounded-xl"
+    <div className="fixed inset-0 bg-gradient-to-b from-primary/95 to-primary z-50 flex flex-col animate-fade-in">
+      <div className="flex items-center justify-between p-4 bg-gradient-to-b from-primary to-transparent">
+        <div className="text-primary-foreground">
+          <h2 className="text-xl font-bold">Virtual Try-On</h2>
+          <p className="text-sm text-primary-foreground/70">
+            {selectedProduct ? selectedProduct.name : (mode === "camera" ? "Move your head to see different angles" : "Photo mode")}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-primary-foreground/10 rounded-xl p-1">
+            <button
+              onClick={() => setRenderMode("3d")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
+                renderMode === "3d" 
+                  ? "bg-accent text-accent-foreground shadow-gold" 
+                  : "text-primary-foreground/70 hover:text-primary-foreground"
+              }`}
             >
-              <Camera className="h-5 w-5" />
-              Start Try-On
-            </Button>
-          </section>
+              <Box className="h-3 w-3 inline mr-1" />
+              3D
+            </button>
+            <button
+              onClick={() => setRenderMode("2d")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 ${
+                renderMode === "2d" 
+                  ? "bg-accent text-accent-foreground shadow-gold" 
+                  : "text-primary-foreground/70 hover:text-primary-foreground"
+              }`}
+            >
+              <Layers className="h-3 w-3 inline mr-1" />
+              2D
+            </button>
+          </div>
+          {mode === "camera" && !capturedImage && (
+            <div className="text-xs text-primary-foreground/60 bg-primary-foreground/10 px-2 py-1 rounded-lg">
+              {fps} FPS
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-primary-foreground hover:bg-primary-foreground/20 rounded-xl"
+          >
+            <X className="h-6 w-6" />
+          </Button>
+        </div>
+      </div>
 
-          {/* Features Grid */}
-          <section className="grid md:grid-cols-3 gap-6 mb-12">
-            {features.map((feature, index) => (
-              <Card 
-                key={feature.title} 
-                className="border-accent/10 rounded-2xl shadow-card animate-fade-in-up"
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <CardContent className="pt-6 text-center">
-                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                    <feature.icon className="h-6 w-6 text-accent" />
-                  </div>
-                  <h3 className="font-bold mb-2 text-primary">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </section>
+      <div className="px-4 pb-2 space-y-3">
+        <FrameShapePanel selectedShape={selectedFrameShape} onSelect={setSelectedFrameShape} />
+        <LensColorSelector selectedColor={selectedLensColor} onSelect={setSelectedLensColor} />
+      </div>
 
-          {/* Available Styles Preview */}
-          <section className="mb-12">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-primary">Available in Try-On</h2>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/browse")}
-                className="gap-1 text-accent hover:text-accent/80"
-              >
-                View All <ArrowRight className="h-4 w-4" />
+      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+        {isLoading && mode === "camera" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/50 z-20">
+            <div className="text-center text-primary-foreground">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-accent" />
+              <p className="text-lg font-medium">Loading face tracking...</p>
+              <p className="text-sm text-primary-foreground/60">This may take a moment</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/50 z-20">
+            <div className="text-center text-primary-foreground p-6 bg-destructive/20 rounded-2xl max-w-md border border-destructive/30">
+              <Camera className="h-12 w-12 mx-auto mb-3 text-destructive" />
+              <p className="text-lg font-bold mb-2">Camera Error</p>
+              <p className="text-sm text-primary-foreground/80">{error}</p>
+              <Button variant="secondary" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Photo Instead
               </Button>
             </div>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-accent" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {products.map((product, index) => (
-                  <Card
-                    key={product.id}
-                    className="overflow-hidden cursor-pointer rounded-2xl border-accent/10 shadow-card transition-all duration-300 hover:shadow-hover hover:-translate-y-1 animate-fade-in-up"
-                    style={{ animationDelay: `${index * 0.05}s` }}
-                    onClick={() => setShowARTryOn(true)}
-                  >
-                    <div className="aspect-[4/3] overflow-hidden">
-                      <img
-                        src={product.image_url || "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop"}
-                        alt={product.name}
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
-                      />
-                    </div>
-                    <CardContent className="p-3">
-                      <h3 className="font-semibold text-sm text-primary">{product.name}</h3>
-                      <p className="text-xs text-muted-foreground">{product.brand}</p>
-                      <p className="text-sm font-bold text-accent mt-1">{formatNaira(product.price)}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
+          </div>
+        )}
 
-          {/* CTA Section */}
-          <section className="text-center py-12 px-6 bg-primary/5 rounded-2xl border border-accent/10 animate-fade-in-up">
-            <h2 className="text-2xl font-bold mb-3 text-primary">Ready to Find Your Perfect Frame?</h2>
-            <p className="text-muted-foreground mb-6">
-              Browse our full catalog and find glasses that match your style.
-            </p>
-            <div className="flex gap-4 justify-center flex-wrap">
-              <Button
-                variant="outline"
-                onClick={() => navigate("/browse")}
-                className="gap-2 rounded-xl border-primary/30 hover:bg-primary/5"
-              >
-                <Glasses className="h-4 w-4" />
-                Browse Products
+        {/* Hidden video is the source for face tracking; canvas is the unified render target */}
+        <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+
+        {/* Canvas as the unified surface; overlays align to its coordinates */}
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            width={TARGET_WIDTH}
+            height={TARGET_HEIGHT}
+            className="max-w-full max-h-[50vh] rounded-2xl shadow-elevated"
+          />
+
+          {renderMode === "3d" && landmarks ? (
+            <Glasses3DOverlay
+              faceLandmarks={landmarks}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              selectedProduct={selectedProduct}
+              frameStyle={selectedFrameShape}
+              adjustments={arAdjustments}
+              lensColor={selectedLensColor}
+              // Expect Glasses3DOverlay to perform its own smoothing and calibration.
+              // If not, we’ll add adaptive scale/rotation in that component.
+            />
+          ) : (
+            <RealisticGlassesOverlay
+              landmarks={landmarks}
+              canvasRef={canvasRef}
+              videoRef={videoRef}
+              selectedProduct={selectedProduct}
+              imageSource={uploadedImage}
+              // Realistic overlay should respect canvas mirroring: since we mirrored video only on draw,
+              // use landmarks as-is and draw overlay in canvas coordinates.
+            />
+          )}
+        </div>
+
+        {renderMode === "3d" && landmarks && !capturedImage && (
+          <ARControls
+            adjustments={arAdjustments}
+            onChange={setArAdjustments}
+            isVisible={showARControls}
+            onToggle={() => setShowARControls(!showARControls)}
+          />
+        )}
+
+        {mode === "camera" && !isLoading && !error && (
+          <div
+            className={`absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
+              landmarks ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
+            }`}
+          >
+            {landmarks ? "✓ Face detected" : "○ Looking for face..."}
+          </div>
+        )}
+
+        {selectedProduct && (
+          <div className="absolute top-4 right-4 bg-accent text-accent-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-gold">
+            {formatNaira(selectedProduct.price)}
+          </div>
+        )}
+
+        {capturedImage && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/95">
+            <img
+              src={capturedImage}
+              alt="Captured"
+              className="max-w-full max-h-[60vh] rounded-2xl shadow-elevated"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gradient-to-t from-primary to-primary/80 pt-4 pb-2">
+        {useRealProducts ? (
+          <ProductGlassesCarousel
+            selectedProductId={selectedProduct?.id || ""}
+            onSelect={handleProductSelect}
+            initialProduct={product}
+          />
+        ) : (
+          <GlassesCarousel selectedId={selectedGlassesId} onSelect={setSelectedGlassesId} />
+        )}
+      </div>
+
+      <div className="bg-primary p-4 safe-area-inset-bottom">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          {!capturedImage ? (
+            <>
+              <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="gap-2 rounded-xl">
+                <Upload className="h-4 w-4" />
+                Upload
               </Button>
+              {mode === "camera" && (
+                <Button
+                  onClick={capturePhoto}
+                  size="lg"
+                  variant="premium"
+                  className="rounded-full h-16 w-16 shadow-gold"
+                  disabled={!landmarks}
+                >
+                  <Camera className="h-6 w-6" />
+                </Button>
+              )}
+              {mode === "photo" && uploadedImage && (
+                <Button variant="secondary" onClick={switchToCamera} className="gap-2 rounded-xl">
+                  <Camera className="h-4 w-4" />
+                  Use Camera
+                </Button>
+              )}
+              {selectedProduct && (
+                <Button onClick={addToCart} variant="premium" className="gap-2 rounded-xl">
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Cart
+                </Button>
+              )}
               <Button
-                variant="premium"
-                onClick={() => setShowARTryOn(true)}
+                variant="secondary"
+                onClick={downloadPhoto}
                 className="gap-2 rounded-xl"
+                disabled={!landmarks && mode === "camera"}
               >
-                <Camera className="h-4 w-4" />
-                Try On Now
+                <Download className="h-4 w-4" />
+                Save
               </Button>
-            </div>
-          </section>
-        </main>
+            </>
+          ) : (
+            <>
+              <Button onClick={retakePhoto} variant="secondary" className="gap-2 rounded-xl">
+                <RotateCw className="h-4 w-4" />
+                Retake
+              </Button>
+              <Button onClick={downloadPhoto} variant="secondary" className="gap-2 rounded-xl">
+                <Download className="h-4 w-4" />
+                Download
+              </Button>
+              <Button onClick={sharePhoto} variant="premium" className="gap-2 rounded-xl">
+                <Share2 className="h-4 w-4" />
+                Share
+              </Button>
+              {selectedProduct && (
+                <Button onClick={addToCart} variant="secondary" className="gap-2 rounded-xl">
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Cart
+                </Button>
+              )}
+            </>
+          )}
+        </div>
 
-      {showARTryOn && <ARTryOn onClose={() => setShowARTryOn(false)} />}
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+      </div>
     </div>
   );
 };
 
-export default TryOn;
+export default ARTryOn;
