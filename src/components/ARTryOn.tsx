@@ -34,18 +34,15 @@ function computeCoverDrawRect(
   dstW: number,
   dstH: number
 ) {
-  // Similar to CSS object-fit: cover for drawing into canvas
   const srcAspect = srcW / srcH;
   const dstAspect = dstW / dstH;
 
   let drawW = dstW;
   let drawH = dstH;
   if (srcAspect > dstAspect) {
-    // Source is wider -> height fits, width overflows
     drawH = dstH;
     drawW = srcAspect * drawH;
   } else {
-    // Source is taller -> width fits, height overflows
     drawW = dstW;
     drawH = drawW / srcAspect;
   }
@@ -74,14 +71,12 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Face tracking hook; ensure it uses the same canvas coordinates we draw into
   const { landmarks, isLoading, error, fps } = useFaceTracking({
     videoRef,
     canvasRef,
     isActive: mode === "camera" && !capturedImage,
   });
 
-  // Ensure canvas has deterministic size
   useEffect(() => {
     if (canvasRef.current) {
       canvasRef.current.width = TARGET_WIDTH;
@@ -89,8 +84,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     }
   }, []);
 
-  // Draw loop to render video or uploaded photo into canvas consistently
-  // while face tracking runs. This ensures overlays use the same coordinate space.
   useEffect(() => {
     let rafId = 0;
     const canvas = canvasRef.current;
@@ -109,17 +102,12 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         const vw = v.videoWidth || TARGET_WIDTH;
         const vh = v.videoHeight || TARGET_HEIGHT;
 
-        // Apply object-fit: cover math
         const { drawW, drawH, offsetX, offsetY } = computeCoverDrawRect(vw, vh, canvas.width, canvas.height);
 
-        // Mirror horizontally for front camera UX
         ctx.save();
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
-
-        // Draw video
         ctx.drawImage(v, offsetX, offsetY, drawW, drawH);
-
         ctx.restore();
       } else if (mode === "photo" && uploadedImage && !capturedImage) {
         const img = uploadedImage;
@@ -191,7 +179,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     img.onload = () => {
       setUploadedImage(img);
       setMode("photo");
-      // Canvas stays at TARGET dims; draw loop uses cover math
     };
     img.src = URL.createObjectURL(file);
     toast.success("Photo uploaded! Face tracking will analyze the image.");
@@ -328,10 +315,8 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           </div>
         )}
 
-        {/* Hidden video is the source for face tracking; canvas is the unified render target */}
         <video ref={videoRef} autoPlay playsInline muted className="hidden" />
 
-        {/* Canvas as the unified surface; overlays align to its coordinates */}
         <div className="relative">
           <canvas
             ref={canvasRef}
@@ -349,8 +334,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               frameStyle={selectedFrameShape}
               adjustments={arAdjustments}
               lensColor={selectedLensColor}
-              // Expect Glasses3DOverlay to perform its own smoothing and calibration.
-              // If not, we’ll add adaptive scale/rotation in that component.
             />
           ) : (
             <RealisticGlassesOverlay
@@ -359,8 +342,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               videoRef={videoRef}
               selectedProduct={selectedProduct}
               imageSource={uploadedImage}
-              // Realistic overlay should respect canvas mirroring: since we mirrored video only on draw,
-              // use landmarks as-is and draw overlay in canvas coordinates.
             />
           )}
         </div>
