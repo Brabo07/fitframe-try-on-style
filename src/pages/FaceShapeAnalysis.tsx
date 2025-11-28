@@ -125,24 +125,46 @@ const FaceShapeAnalysis = () => {
       stopCamera();
 
       try {
-        const { data, error } = await supabase.functions.invoke('analyze-face-shape', {
+        const response = await supabase.functions.invoke('analyze-face-shape', {
           body: { image: imageData }
         });
 
-        if (error) throw error;
+        // Check for HTTP error responses
+        if (response.error) {
+          console.error("Function invocation error:", response.error);
+          throw new Error(response.error.message || "Failed to analyze face shape");
+        }
 
-        const detectedShape = data.faceShape;
+        // Check if we got error data back from the function
+        if (response.data?.error) {
+          console.error("Edge function returned error:", response.data.error);
+          throw new Error(response.data.error);
+        }
+
+        // Validate the response has the expected structure
+        if (!response.data || !response.data.faceShape) {
+          console.error("Invalid response structure:", response.data);
+          throw new Error("Received invalid response from analysis service");
+        }
+
+        const detectedShape = response.data.faceShape;
+        console.log("Face shape detected:", detectedShape);
+        
         setFaceShape(detectedShape);
         setStep('results');
 
         // Fetch recommended products based on face shape
         const recommendedStyles = faceShapeInfo[detectedShape]?.recommendedStyles || [];
-        const { data: products } = await supabase
+        const { data: products, error: productsError } = await supabase
           .from('glasses_products')
           .select('*')
           .eq('in_stock', true)
           .in('frame_style', recommendedStyles)
           .limit(6);
+
+        if (productsError) {
+          console.error("Error fetching products:", productsError);
+        }
 
         setRecommendedProducts(products || []);
 
@@ -153,9 +175,23 @@ const FaceShapeAnalysis = () => {
       } catch (error: any) {
         console.error("Analysis error:", error);
         setStep('intro');
+        
+        let errorMessage = "Please try again with better lighting.";
+        
+        // Handle specific error messages
+        if (error.message?.includes("Rate limit")) {
+          errorMessage = "Too many requests. Please wait a moment and try again.";
+        } else if (error.message?.includes("Payment required")) {
+          errorMessage = "Service temporarily unavailable. Please try again later.";
+        } else if (error.message?.includes("Camera") || error.message?.includes("camera")) {
+          errorMessage = "Camera access error. Please check your permissions.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
         toast({
-          title: "Analysis failed",
-          description: error.message || "Please try again with better lighting.",
+          title: "Analysis Failed",
+          description: errorMessage,
           variant: "destructive"
         });
       } finally {
