@@ -59,9 +59,9 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     (product?.frame_style as FrameShape) || "aviator"
   );
   const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(product || null);
-  const [selectedGlassesId, setSelectedGlassesId] = useState(
-    product?.frame_style ? `${product.frame_style}-${product.frame_color?.toLowerCase()}` : glassesStyles[0].id
-  );
+  const [selectedGlassesId, setSelectedGlassesId] = useState(
+    product?.frame_style && product?.frame_color ? `${product.frame_style}-${product.frame_color.toLowerCase()}` : glassesStyles[0].id
+  );
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(null);
   const [arAdjustments, setArAdjustments] = useState<ARAdjustments>(defaultAdjustments);
@@ -85,37 +85,44 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     }
   }, []);
 
-  // --- ENHANCEMENT 1: Logic to synthesize a product object for 2D rendering ---
-  const currentProductFor2D = useMemo(() => {
-    // If a real product is selected, use it directly
-    if (selectedProduct) {
-      // Override the lens color if the user selected one in the UI
-      return { ...selectedProduct, lens_color: selectedLensColor };
-    }
+  // --- ENHANCEMENT 1: Logic to synthesize a product object for 2D rendering ---
+  const currentProductFor2D = useMemo(() => {
+    // If a real product is selected, use it directly
+    if (selectedProduct) {
+      return selectedProduct;
+    }
 
-    // If no real product is selected (i.e., using generic styles from the carousel)
-    // Find the selected style from the generic list
-    const genericStyle = glassesStyles.find(
-      (style) => style.id === selectedGlassesId
-    );
+    // If no real product is selected (i.e., using generic styles from the carousel)
+    // Find the selected style from the generic list
+    const genericStyle = glassesStyles.find(
+      (style) => style.id === selectedGlassesId
+    );
 
-    // Synthesize a minimal product object required by RealisticGlassesOverlay
-    if (genericStyle) {
-      return {
-        // Dummy required fields for TypeScript compatibility
-        id: "synthetic",
-        name: "Custom Style",
-        price: 0,
-        created_at: new Date().toISOString(),
-        // Core fields for rendering
-        frame_style: selectedFrameShape,
-        frame_color: genericStyle.frameColor,
-        lens_color: selectedLensColor, // Use user selected lens color
-      } as Tables<"glasses_products">;
-    }
-    return null;
-  }, [selectedProduct, selectedFrameShape, selectedGlassesId, selectedLensColor]);
-  // --------------------------------------------------------------------------
+    // Synthesize a minimal product object required by RealisticGlassesOverlay
+    if (genericStyle) {
+      return {
+        id: "synthetic",
+        name: "Custom Style",
+        price: 0,
+        created_at: new Date().toISOString(),
+        brand: "Custom",
+        description: null,
+        frame_style: selectedFrameShape,
+        frame_color: genericStyle.color,
+        frame_material: "mixed" as const,
+        gender: "unisex" as const,
+        in_stock: true,
+        image_url: genericStyle.imageUrl,
+        additional_images: null,
+        suitable_face_shapes: null,
+        lens_width: null,
+        bridge_width: null,
+        temple_length: null,
+      } as Tables<"glasses_products">;
+    }
+    return null;
+  }, [selectedProduct, selectedFrameShape, selectedGlassesId, selectedLensColor]);
+  // --------------------------------------------------------------------------
 
   useEffect(() => {
     let rafId = 0;
@@ -262,14 +269,15 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     }
   };
 
-  // --- ENHANCEMENT 2: Update frame shape/color when a real product is selected ---
-  const handleProductSelect = (p: Tables<"glasses_products">) => {
-    setSelectedProduct(p);
-    setSelectedGlassesId(`${p.frame_style}-${p.frame_color.toLowerCase()}`);
-    // Auto-update UI selectors to match the product
-    setSelectedFrameShape(p.frame_style as FrameShape);
-    setSelectedLensColor((p.lens_color || "clear") as LensColor);
-  };
+  // --- ENHANCEMENT 2: Update frame shape/color when a real product is selected ---
+  const handleProductSelect = (p: Tables<"glasses_products">) => {
+    setSelectedProduct(p);
+    if (p.frame_color) {
+      setSelectedGlassesId(`${p.frame_style}-${p.frame_color.toLowerCase()}`);
+    }
+    // Auto-update UI selectors to match the product
+    setSelectedFrameShape(p.frame_style as FrameShape);
+  };
   // --------------------------------------------------------------------------
   
   // --- ENHANCEMENT 3: Update selected product based on generic shape/color selection ---
