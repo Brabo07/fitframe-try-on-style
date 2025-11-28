@@ -133,6 +133,9 @@ const ProductCard = ({ product }: ProductCardProps) => {
                 transition-all duration-700 ease-out
                 ${isHovered ? 'scale-110' : 'scale-100'}
               `}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&h=600&fit=crop";
+              }}
             />
             
             {/* Subtle glow overlay on hover */}
