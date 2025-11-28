@@ -6,17 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, Package, Truck, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { formatNaira } from "@/utils/formatCurrency";
+import { addDays, format } from "date-fns";
+
+type CheckoutStep = "form" | "processing" | "success" | "delivery";
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { trackEvent } = useAnalytics();
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [orderComplete, setOrderComplete] = useState(false);
+  const [currentStep, setCurrentStep] = useState<CheckoutStep>("form");
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [formData, setFormData] = useState({
@@ -29,6 +31,8 @@ const Checkout = () => {
     expiryDate: "",
     cvv: "",
   });
+
+  const deliveryDate = addDays(new Date(), 3);
 
   useEffect(() => {
     fetchCartData();
@@ -81,7 +85,7 @@ const Checkout = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setProcessing(true);
+    setCurrentStep("processing");
 
     try {
       // Create order
@@ -127,17 +131,19 @@ const Checkout = () => {
         items_count: cartItems.length,
       });
 
-      setOrderComplete(true);
-      toast.success("Order placed successfully!");
-      
+      // Show processing for 3 seconds
       setTimeout(() => {
-        navigate("/browse");
+        setCurrentStep("success");
+        // After 1 second, move to delivery screen
+        setTimeout(() => {
+          setCurrentStep("delivery");
+        }, 1500);
       }, 3000);
+
     } catch (error) {
       console.error("Error processing order:", error);
       toast.error("Failed to process order");
-    } finally {
-      setProcessing(false);
+      setCurrentStep("form");
     }
   };
 
@@ -152,22 +158,156 @@ const Checkout = () => {
     );
   }
 
-  if (orderComplete) {
+  // Processing Payment Screen
+  if (currentStep === "processing") {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container py-12 px-4">
-          <div className="max-w-md mx-auto text-center animate-scale-in">
-            <CheckCircle2 className="h-20 w-20 mx-auto mb-6 text-primary" />
-            <h1 className="text-3xl font-bold mb-4">Order Complete!</h1>
-            <p className="text-muted-foreground mb-8">
-              Thank you for your purchase. Your order has been confirmed.
+          <div className="max-w-md mx-auto text-center animate-fade-in">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              {/* Animated rings */}
+              <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping" />
+              <div className="absolute inset-2 rounded-full border-4 border-primary/40 animate-ping" style={{ animationDelay: "0.2s" }} />
+              <div className="absolute inset-4 rounded-full border-4 border-primary/60 animate-ping" style={{ animationDelay: "0.4s" }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold mb-4 text-foreground">Processing Payment...</h1>
+            <p className="text-muted-foreground">
+              Please wait while we securely process your payment.
             </p>
-            <p className="text-sm text-muted-foreground">
-              Redirecting to browse...
+            <div className="mt-8 h-2 bg-secondary rounded-full overflow-hidden">
+              <div className="h-full bg-primary animate-[progress_3s_ease-in-out]" style={{ 
+                animation: "progress 3s ease-in-out forwards"
+              }} />
+            </div>
+          </div>
+        </main>
+        <style>{`
+          @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Payment Success Screen
+  if (currentStep === "success") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container py-12 px-4">
+          <div className="max-w-md mx-auto text-center">
+            <div className="relative w-24 h-24 mx-auto mb-8 animate-scale-in">
+              <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-green-500">
+                <CheckCircle2 className="h-14 w-14 text-white" />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold mb-4 text-foreground animate-fade-in">
+              Payment Successful 🎉
+            </h1>
+            <p className="text-muted-foreground animate-fade-in" style={{ animationDelay: "0.2s" }}>
+              Your order has been confirmed!
             </p>
           </div>
         </main>
+      </div>
+    );
+  }
+
+  // Delivery ETA Screen
+  if (currentStep === "delivery") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container py-12 px-4">
+          <div className="max-w-md mx-auto text-center">
+            {/* Animated delivery truck */}
+            <div className="relative h-32 mb-8 overflow-hidden">
+              <div className="absolute inset-x-0 bottom-4 h-1 bg-primary/20 rounded-full" />
+              <div className="animate-[truck_2s_ease-in-out_infinite] relative">
+                <div className="flex items-center justify-center">
+                  <div className="relative">
+                    <Truck className="h-16 w-16 text-primary animate-bounce" style={{ animationDuration: "2s" }} />
+                    <Package className="absolute -top-2 -right-2 h-6 w-6 text-accent animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <h1 className="text-3xl font-bold mb-2 text-foreground animate-fade-in">
+              Your Glasses Are on the Way!
+            </h1>
+            
+            <p className="text-muted-foreground mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+              Estimated Delivery Time:
+            </p>
+
+            <Card className="mb-8 shadow-elegant animate-scale-in" style={{ animationDelay: "0.2s" }}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Package className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm text-muted-foreground">Expected Arrival</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {format(deliveryDate, "EEEE, MMM d")}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(deliveryDate, "yyyy")}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Delivery timeline */}
+            <div className="flex justify-between items-center px-4 mb-8 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+              <div className="flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center mb-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <span className="text-xs text-muted-foreground">Confirmed</span>
+              </div>
+              <div className="flex-1 h-1 bg-primary mx-2" />
+              <div className="flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-primary/50 flex items-center justify-center mb-2 animate-pulse">
+                  <Package className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <span className="text-xs text-muted-foreground">Shipped</span>
+              </div>
+              <div className="flex-1 h-1 bg-secondary mx-2" />
+              <div className="flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center mb-2">
+                  <Home className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <span className="text-xs text-muted-foreground">Delivered</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => navigate("/")}
+              size="lg"
+              className="w-full animate-fade-in"
+              style={{ animationDelay: "0.4s" }}
+            >
+              <Home className="mr-2 h-5 w-5" />
+              Go Home
+            </Button>
+          </div>
+        </main>
+        <style>{`
+          @keyframes truck {
+            0%, 100% { transform: translateX(-10px); }
+            50% { transform: translateX(10px); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -326,16 +466,8 @@ const Checkout = () => {
                     type="submit" 
                     className="w-full" 
                     size="lg"
-                    disabled={processing}
                   >
-                    {processing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      "Place Order"
-                    )}
+                    Place Order
                   </Button>
                 </CardContent>
               </Card>
