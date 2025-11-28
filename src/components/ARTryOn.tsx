@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+// src/components/ARTryOn.tsx
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, X, RotateCw, Download, Share2, Upload, Loader2, ShoppingCart, Box, Layers } from "lucide-react";
 import { toast } from "sonner";
@@ -21,15 +22,45 @@ interface ARTryOnProps {
   useRealProducts?: boolean;
 }
 
+type SourceMode = "camera" | "photo";
+type RenderMode = "3d" | "2d";
+
+const TARGET_WIDTH = 1280;
+const TARGET_HEIGHT = 720;
+
+function computeCoverDrawRect(
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number
+) {
+  // Similar to CSS object-fit: cover for drawing into canvas
+  const srcAspect = srcW / srcH;
+  const dstAspect = dstW / dstH;
+
+  let drawW = dstW;
+  let drawH = dstH;
+  if (srcAspect > dstAspect) {
+    // Source is wider -> height fits, width overflows
+    drawH = dstH;
+    drawW = srcAspect * drawH;
+  } else {
+    // Source is taller -> width fits, height overflows
+    drawW = dstW;
+    drawH = drawW / srcAspect;
+  }
+  const offsetX = (dstW - drawW) / 2;
+  const offsetY = (dstH - drawH) / 2;
+  return { drawW, drawH, offsetX, offsetY };
+}
+
 const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => {
-  const [mode, setMode] = useState<"camera" | "photo">("camera");
-  const [renderMode, setRenderMode] = useState<"3d" | "2d">("3d");
+  const [mode, setMode] = useState<SourceMode>("camera");
+  const [renderMode, setRenderMode] = useState<RenderMode>("3d");
   const [selectedFrameShape, setSelectedFrameShape] = useState<FrameShape>(
     (product?.frame_style as FrameShape) || "aviator"
   );
-  const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(
-    product || null
-  );
+  const [selectedProduct, setSelectedProduct] = useState<Tables<"glasses_products"> | null>(product || null);
   const [selectedGlassesId, setSelectedGlassesId] = useState(
     product?.frame_style ? `${product.frame_style}-${product.frame_color?.toLowerCase()}` : glassesStyles[0].id
   );
@@ -38,16 +69,70 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   const [arAdjustments, setArAdjustments] = useState<ARAdjustments>(defaultAdjustments);
   const [showARControls, setShowARControls] = useState(false);
   const [selectedLensColor, setSelectedLensColor] = useState<LensColor>("clear");
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Face tracking hook; ensure it uses the same canvas coordinates we draw into
   const { landmarks, isLoading, error, fps } = useFaceTracking({
     videoRef,
     canvasRef,
     isActive: mode === "camera" && !capturedImage,
   });
+
+  // Ensure canvas has deterministic size
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.width = TARGET_WIDTH;
+      canvasRef.current.height = TARGET_HEIGHT;
+    }
+  }, []);
+
+  // Draw loop to render video or uploaded photo into canvas consistently
+  // while face tracking runs. This ensures overlays use the same coordinate space.
+  useEffect(() => {
+    let rafId = 0;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+
+    const draw = () => {
+      if (!canvas || !ctx) {
+        rafId = requestAnimationFrame(draw);
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (mode === "camera" && videoRef.current && !capturedImage) {
+        const v = videoRef.current;
+        const vw = v.videoWidth || TARGET_WIDTH;
+        const vh = v.videoHeight || TARGET_HEIGHT;
+
+        // Apply object-fit: cover math
+        const { drawW, drawH, offsetX, offsetY } = computeCoverDrawRect(vw, vh, canvas.width, canvas.height);
+
+        // Mirror horizontally for front camera UX
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+
+        // Draw video
+        ctx.drawImage(v, offsetX, offsetY, drawW, drawH);
+
+        ctx.restore();
+      } else if (mode === "photo" && uploadedImage && !capturedImage) {
+        const img = uploadedImage;
+        const { drawW, drawH, offsetX, offsetY } = computeCoverDrawRect(img.width, img.height, canvas.width, canvas.height);
+        ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+      }
+
+      rafId = requestAnimationFrame(draw);
+    };
+
+    rafId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafId);
+  }, [mode, uploadedImage, capturedImage]);
 
   const capturePhoto = useCallback(() => {
     if (!canvasRef.current) return;
@@ -59,11 +144,11 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   const retakePhoto = useCallback(() => {
     setCapturedImage(null);
     setUploadedImage(null);
+    setMode("camera");
   }, []);
 
   const downloadPhoto = useCallback(() => {
     if (!capturedImage && !canvasRef.current) return;
-    
     const imageData = capturedImage || canvasRef.current?.toDataURL("image/png");
     if (!imageData) return;
 
@@ -81,8 +166,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     try {
       const blob = await (await fetch(imageData)).blob();
       const file = new File([blob], `fitframe-tryon.png`, { type: "image/png" });
-      
-      if (navigator.share && navigator.canShare({ files: [file] })) {
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: "FitFrame Virtual Try-On",
@@ -107,25 +191,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     img.onload = () => {
       setUploadedImage(img);
       setMode("photo");
-      
-      if (canvasRef.current) {
-        const maxWidth = 1280;
-        const maxHeight = 720;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = (maxWidth / width) * height;
-          width = maxWidth;
-        }
-        if (height > maxHeight) {
-          width = (maxHeight / height) * width;
-          height = maxHeight;
-        }
-
-        canvasRef.current.width = width;
-        canvasRef.current.height = height;
-      }
+      // Canvas stays at TARGET dims; draw loop uses cover math
     };
     img.src = URL.createObjectURL(file);
     toast.success("Photo uploaded! Face tracking will analyze the image.");
@@ -135,11 +201,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     setUploadedImage(null);
     setCapturedImage(null);
     setMode("camera");
-    
-    if (canvasRef.current) {
-      canvasRef.current.width = 1280;
-      canvasRef.current.height = 720;
-    }
   }, []);
 
   const addToCart = async () => {
@@ -179,17 +240,16 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
     }
   };
 
-  const handleProductSelect = (product: Tables<"glasses_products">) => {
-    setSelectedProduct(product);
-    setSelectedGlassesId(`${product.frame_style}-${product.frame_color.toLowerCase()}`);
+  const handleProductSelect = (p: Tables<"glasses_products">) => {
+    setSelectedProduct(p);
+    setSelectedGlassesId(`${p.frame_style}-${p.frame_color.toLowerCase()}`);
   };
 
-  const canvasWidth = canvasRef.current?.width || 1280;
-  const canvasHeight = canvasRef.current?.height || 720;
+  const canvasWidth = canvasRef.current?.width || TARGET_WIDTH;
+  const canvasHeight = canvasRef.current?.height || TARGET_HEIGHT;
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-primary/95 to-primary z-50 flex flex-col animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gradient-to-b from-primary to-transparent">
         <div className="text-primary-foreground">
           <h2 className="text-xl font-bold">Virtual Try-On</h2>
@@ -198,7 +258,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Render mode toggle */}
           <div className="flex items-center bg-primary-foreground/10 rounded-xl p-1">
             <button
               onClick={() => setRenderMode("3d")}
@@ -223,7 +282,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               2D
             </button>
           </div>
-          
           {mode === "camera" && !capturedImage && (
             <div className="text-xs text-primary-foreground/60 bg-primary-foreground/10 px-2 py-1 rounded-lg">
               {fps} FPS
@@ -240,19 +298,11 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         </div>
       </div>
 
-      {/* Frame Shape Panel & Lens Color */}
       <div className="px-4 pb-2 space-y-3">
-        <FrameShapePanel
-          selectedShape={selectedFrameShape}
-          onSelect={setSelectedFrameShape}
-        />
-        <LensColorSelector
-          selectedColor={selectedLensColor}
-          onSelect={setSelectedLensColor}
-        />
+        <FrameShapePanel selectedShape={selectedFrameShape} onSelect={setSelectedFrameShape} />
+        <LensColorSelector selectedColor={selectedLensColor} onSelect={setSelectedLensColor} />
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
         {isLoading && mode === "camera" && (
           <div className="absolute inset-0 flex items-center justify-center bg-primary/50 z-20">
@@ -270,11 +320,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               <Camera className="h-12 w-12 mx-auto mb-3 text-destructive" />
               <p className="text-lg font-bold mb-2">Camera Error</p>
               <p className="text-sm text-primary-foreground/80">{error}</p>
-              <Button
-                variant="secondary"
-                className="mt-4"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <Button variant="secondary" className="mt-4" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Photo Instead
               </Button>
@@ -282,26 +328,18 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           </div>
         )}
 
-        {/* Video element (hidden, used for MediaPipe) */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="hidden"
-        />
+        {/* Hidden video is the source for face tracking; canvas is the unified render target */}
+        <video ref={videoRef} autoPlay playsInline muted className="hidden" />
 
-        {/* Canvas container with relative positioning for 3D overlay */}
+        {/* Canvas as the unified surface; overlays align to its coordinates */}
         <div className="relative">
-          {/* Canvas for video/photo rendering */}
           <canvas
             ref={canvasRef}
-            width={1280}
-            height={720}
+            width={TARGET_WIDTH}
+            height={TARGET_HEIGHT}
             className="max-w-full max-h-[50vh] rounded-2xl shadow-elevated"
           />
 
-          {/* 3D or 2D Glasses Overlay */}
           {renderMode === "3d" && landmarks ? (
             <Glasses3DOverlay
               faceLandmarks={landmarks}
@@ -311,6 +349,8 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               frameStyle={selectedFrameShape}
               adjustments={arAdjustments}
               lensColor={selectedLensColor}
+              // Expect Glasses3DOverlay to perform its own smoothing and calibration.
+              // If not, we’ll add adaptive scale/rotation in that component.
             />
           ) : (
             <RealisticGlassesOverlay
@@ -319,11 +359,12 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               videoRef={videoRef}
               selectedProduct={selectedProduct}
               imageSource={uploadedImage}
+              // Realistic overlay should respect canvas mirroring: since we mirrored video only on draw,
+              // use landmarks as-is and draw overlay in canvas coordinates.
             />
           )}
         </div>
 
-        {/* AR Controls */}
         {renderMode === "3d" && landmarks && !capturedImage && (
           <ARControls
             adjustments={arAdjustments}
@@ -333,23 +374,22 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           />
         )}
 
-        {/* Face detection indicator */}
         {mode === "camera" && !isLoading && !error && (
-          <div className={`absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
-            landmarks ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
-          }`}>
+          <div
+            className={`absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
+              landmarks ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"
+            }`}
+          >
             {landmarks ? "✓ Face detected" : "○ Looking for face..."}
           </div>
         )}
 
-        {/* Selected product price tag */}
         {selectedProduct && (
           <div className="absolute top-4 right-4 bg-accent text-accent-foreground px-4 py-2 rounded-xl text-sm font-bold shadow-gold">
             {formatNaira(selectedProduct.price)}
           </div>
         )}
 
-        {/* Captured image overlay */}
         {capturedImage && (
           <div className="absolute inset-0 flex items-center justify-center bg-primary/95">
             <img
@@ -361,7 +401,6 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         )}
       </div>
 
-      {/* Glasses Carousel */}
       <div className="bg-gradient-to-t from-primary to-primary/80 pt-4 pb-2">
         {useRealProducts ? (
           <ProductGlassesCarousel
@@ -370,27 +409,18 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             initialProduct={product}
           />
         ) : (
-          <GlassesCarousel
-            selectedId={selectedGlassesId}
-            onSelect={setSelectedGlassesId}
-          />
+          <GlassesCarousel selectedId={selectedGlassesId} onSelect={setSelectedGlassesId} />
         )}
       </div>
 
-      {/* Controls */}
       <div className="bg-primary p-4 safe-area-inset-bottom">
         <div className="flex items-center justify-center gap-3 flex-wrap">
           {!capturedImage ? (
             <>
-              <Button
-                variant="secondary"
-                onClick={() => fileInputRef.current?.click()}
-                className="gap-2 rounded-xl"
-              >
+              <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="gap-2 rounded-xl">
                 <Upload className="h-4 w-4" />
                 Upload
               </Button>
-              
               {mode === "camera" && (
                 <Button
                   onClick={capturePhoto}
@@ -402,29 +432,18 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
                   <Camera className="h-6 w-6" />
                 </Button>
               )}
-
               {mode === "photo" && uploadedImage && (
-                <Button
-                  variant="secondary"
-                  onClick={switchToCamera}
-                  className="gap-2 rounded-xl"
-                >
+                <Button variant="secondary" onClick={switchToCamera} className="gap-2 rounded-xl">
                   <Camera className="h-4 w-4" />
                   Use Camera
                 </Button>
               )}
-
               {selectedProduct && (
-                <Button
-                  onClick={addToCart}
-                  variant="premium"
-                  className="gap-2 rounded-xl"
-                >
+                <Button onClick={addToCart} variant="premium" className="gap-2 rounded-xl">
                   <ShoppingCart className="h-4 w-4" />
                   Add to Cart
                 </Button>
               )}
-
               <Button
                 variant="secondary"
                 onClick={downloadPhoto}
@@ -437,36 +456,20 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
             </>
           ) : (
             <>
-              <Button
-                onClick={retakePhoto}
-                variant="secondary"
-                className="gap-2 rounded-xl"
-              >
+              <Button onClick={retakePhoto} variant="secondary" className="gap-2 rounded-xl">
                 <RotateCw className="h-4 w-4" />
                 Retake
               </Button>
-              <Button
-                onClick={downloadPhoto}
-                variant="secondary"
-                className="gap-2 rounded-xl"
-              >
+              <Button onClick={downloadPhoto} variant="secondary" className="gap-2 rounded-xl">
                 <Download className="h-4 w-4" />
                 Download
               </Button>
-              <Button
-                onClick={sharePhoto}
-                variant="premium"
-                className="gap-2 rounded-xl"
-              >
+              <Button onClick={sharePhoto} variant="premium" className="gap-2 rounded-xl">
                 <Share2 className="h-4 w-4" />
                 Share
               </Button>
               {selectedProduct && (
-                <Button
-                  onClick={addToCart}
-                  variant="secondary"
-                  className="gap-2 rounded-xl"
-                >
+                <Button onClick={addToCart} variant="secondary" className="gap-2 rounded-xl">
                   <ShoppingCart className="h-4 w-4" />
                   Add to Cart
                 </Button>
@@ -475,13 +478,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
           )}
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileUpload}
-          className="hidden"
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
       </div>
     </div>
   );
