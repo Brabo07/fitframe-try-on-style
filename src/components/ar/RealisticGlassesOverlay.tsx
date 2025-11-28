@@ -3,9 +3,6 @@ import { FaceLandmarks } from "@/hooks/useFaceTracking";
 import { getFrameColorHex } from "@/data/glassesStyles";
 import type { Tables } from "@/integrations/supabase/types";
 
-// Helper function definitions from the original code (omitted for brevity)
-// NOTE: Ensure 'getLensColorForFrame' and 'adjustColorOpacity' are defined or imported.
-
 interface RealisticGlassesOverlayProps {
   landmarks: FaceLandmarks | null;
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -16,7 +13,7 @@ interface RealisticGlassesOverlayProps {
 
 // Frame style configurations for different shapes
 const frameConfigs: Record<string, {
-  lensShape: "rounded" | "rectangular" | "aviator" | "cat-eye" | "round" | "oversized" | "geometric";
+  lensShape: "rounded" | "rectangular" | "aviator" | "cat-eye" | "round" | "oversized";
   bridgeStyle: "thin" | "thick" | "double";
   templeStyle: "standard" | "wide" | "thin";
 }> = {
@@ -38,8 +35,8 @@ const RealisticGlassesOverlay = ({
 }: RealisticGlassesOverlayProps) => {
   const animationFrameRef = useRef<number>();
   const [smoothedLandmarks, setSmoothedLandmarks] = useState<FaceLandmarks | null>(null);
-
-  // Advanced smoothing with velocity tracking (Kept as is - it's good for stability)
+  
+  // Advanced smoothing with velocity tracking
   const prevLandmarksRef = useRef<FaceLandmarks | null>(null);
   const velocityRef = useRef<{
     position: { x: number; y: number };
@@ -51,7 +48,7 @@ const RealisticGlassesOverlay = ({
     scale: 0,
   });
 
-  // Smooth landmarks with velocity-aware interpolation (Kept as is)
+  // Smooth landmarks with velocity-aware interpolation
   useEffect(() => {
     if (!landmarks) {
       setSmoothedLandmarks(null);
@@ -60,14 +57,13 @@ const RealisticGlassesOverlay = ({
 
     const smoothingFactor = 0.25;
     const velocityDamping = 0.85;
-    // ... (rest of the smoothing logic)
-    
-    // START: Smoothing Logic (omitted for brevity - keep original logic)
+
     if (!prevLandmarksRef.current) {
       prevLandmarksRef.current = landmarks;
       setSmoothedLandmarks(landmarks);
       return;
     }
+
     const prev = prevLandmarksRef.current;
     
     // Calculate velocity
@@ -145,19 +141,20 @@ const RealisticGlassesOverlay = ({
 
     prevLandmarksRef.current = smoothed;
     setSmoothedLandmarks(smoothed);
-    // END: Smoothing Logic
   }, [landmarks]);
 
-  // Render loop (Kept as is)
   useEffect(() => {
     const render = () => {
       if (!canvasRef.current) return;
+
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw video or image (kept as is)
+      // Draw video or image
       if (imageSource) {
         ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
       } else if (videoRef.current && videoRef.current.readyState >= 2) {
@@ -171,10 +168,12 @@ const RealisticGlassesOverlay = ({
       if (smoothedLandmarks && selectedProduct) {
         drawRealisticGlasses(ctx, smoothedLandmarks, selectedProduct);
       }
+
       animationFrameRef.current = requestAnimationFrame(render);
     };
 
     render();
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -190,74 +189,70 @@ const RealisticGlassesOverlay = ({
     const canvasWidth = ctx.canvas.width;
     const mirrorX = (x: number) => canvasWidth - x;
 
-    // Use centers from smoothedLandmarks for better stability
-    const leftEyeCenter = { x: mirrorX(landmarks.leftEyeCenter.x), y: landmarks.leftEyeCenter.y };
-    const rightEyeCenter = { x: mirrorX(landmarks.rightEyeCenter.x), y: landmarks.rightEyeCenter.y };
+    // Get mirrored eye positions
+    const leftEyeOuter = { x: mirrorX(landmarks.leftEyeOuter.x), y: landmarks.leftEyeOuter.y };
+    const leftEyeInner = { x: mirrorX(landmarks.leftEyeInner.x), y: landmarks.leftEyeInner.y };
+    const rightEyeOuter = { x: mirrorX(landmarks.rightEyeOuter.x), y: landmarks.rightEyeOuter.y };
+    const rightEyeInner = { x: mirrorX(landmarks.rightEyeInner.x), y: landmarks.rightEyeInner.y };
     const noseBridge = { x: mirrorX(landmarks.noseBridge.x), y: landmarks.noseBridge.y };
-    // const noseTop = { x: mirrorX(landmarks.noseTop.x), y: landmarks.noseTop.y }; // Not used for glasses center
+    const noseTop = { x: mirrorX(landmarks.noseTop.x), y: landmarks.noseTop.y };
 
+    // Calculate eye centers
+    const leftEyeCenter = {
+      x: (leftEyeOuter.x + leftEyeInner.x) / 2,
+      y: (leftEyeOuter.y + leftEyeInner.y) / 2,
+    };
+    const rightEyeCenter = {
+      x: (rightEyeOuter.x + rightEyeInner.x) / 2,
+      y: (rightEyeOuter.y + rightEyeInner.y) / 2,
+    };
+
+    // Calculate dimensions based on face metrics
     const eyeDistance = landmarks.eyeDistance;
+    const depth = landmarks.faceWidth / 200; // Depth estimation
+    
+    // Scale factor based on face distance from camera
+    const scaleFactor = eyeDistance / 100;
+    
+    // Lens dimensions - adjusted for realistic proportions
+    const lensWidth = eyeDistance * 0.95;
+    const lensHeight = lensWidth * 0.7;
+    const frameThickness = Math.max(4, eyeDistance * 0.08) * scaleFactor;
+    const bridgeWidth = eyeDistance * 0.15;
 
-    // --- ADJUSTMENTS START HERE ---
-
-    // 1. Refined Scale Factor: Use eye-to-eye distance directly for most scaling
-    // Use a reference distance (e.g., 100 pixels) for relative scaling.
-    // Adjusted reference (120 -> 100) and scale factor use to influence sizing.
-    const referenceDistance = 100;
-    const scaleFactor = eyeDistance / referenceDistance;
-    
-    // 2. Tighter Lens Dimensions
-    // Reduced overall width multiplier (0.95 -> 0.85) to prevent overly wide frames.
-    const overallFrameWidthRatio = 0.85; 
-    const lensWidth = eyeDistance * overallFrameWidthRatio; 
-    // Adjusted height ratio for better lens fit (0.7 -> 0.65).
-    const lensHeight = lensWidth * 0.65; 
-    
-    // 3. More Conservative Frame Thickness
-    // Made the base thickness smaller to avoid bulky frames.
-    const frameThicknessBase = Math.max(2, eyeDistance * 0.05); 
-    const frameThickness = frameThicknessBase * scaleFactor;
-    
-    // 4. Center Position: Use nose bridge for vertical anchor, eye centers for horizontal
+    // Center position between eyes
     const centerX = (leftEyeCenter.x + rightEyeCenter.x) / 2;
-    // Anchor glasses slightly above the nose bridge point for a realistic fit.
-    const centerY = noseBridge.y - eyeDistance * 0.15; // Adjusted vertical anchor
+    const centerY = (leftEyeCenter.y + rightEyeCenter.y) / 2;
+    
+    // Vertical offset - glasses sit slightly below eye center
+    const verticalOffset = lensHeight * 0.15;
 
-    // Vertical offset - glasses sit *relative* to the new anchor point.
-    // A slight downward nudge from the eye-line (which is close to the new centerY).
-    const verticalOffset = lensHeight * 0.1; 
-
-    // Calculate rotation (Kept as is)
+    // Calculate rotation
     const roll = landmarks.rotation.roll * (Math.PI / 180);
     const yaw = landmarks.rotation.yaw;
     const pitch = landmarks.rotation.pitch;
 
-    // Get frame style configuration (Kept as is)
+    // Get frame style configuration
     const frameStyle = product.frame_style || "rectangular";
     const config = frameConfigs[frameStyle] || frameConfigs.rectangular;
     
-    // Get colors (Kept as is)
+    // Get colors
     const frameColor = getFrameColorHex(product.frame_color);
     const lensColor = getLensColorForFrame(product.frame_color, config.lensShape);
 
     ctx.save();
-    // 5. Apply Translation and Rotation
-    // Use center point for translation, and apply offset and roll rotation.
     ctx.translate(centerX, centerY + verticalOffset);
     ctx.rotate(-roll);
 
     // Apply perspective based on yaw
     const yawFactor = 1 - Math.abs(yaw) * 0.015;
-    // Reduced yaw offset (1.2 -> 1.0) for less horizontal shift
-    const yawOffset = yaw * 1.0; 
+    const yawOffset = yaw * 1.2;
 
     // Calculate lens positions
-    // Reduced horizontal distance multiplier (0.52 -> 0.45) for lenses to sit closer to the eye centers.
-    const lensXOffset = eyeDistance * 0.45; 
-    const leftLensX = -lensXOffset + yawOffset;
-    const rightLensX = lensXOffset + yawOffset;
+    const leftLensX = -eyeDistance * 0.52 + yawOffset;
+    const rightLensX = eyeDistance * 0.52 + yawOffset;
 
-    // Draw shadow for depth (Kept as is)
+    // Draw shadow for depth
     ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
     ctx.shadowBlur = 8 * scaleFactor;
     ctx.shadowOffsetY = 4 * scaleFactor;
@@ -275,20 +270,14 @@ const RealisticGlassesOverlay = ({
     drawBridge(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, config.bridgeStyle, frameColor, frameThickness, yaw);
 
     // Draw nose pads (small circles where glasses rest on nose)
-    // Passed the more conservative frameThickness * 0.5 for a smaller pad.
     drawNosePads(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, frameColor, frameThickness * 0.5, yaw);
 
     // Draw temples (arms)
-    const templeLength = lensWidth * 1.0; // Reduced temple length
+    const templeLength = lensWidth * 1.2;
     drawTemples(ctx, leftLensX, rightLensX, lensWidth * yawFactor, lensHeight, templeLength, config.templeStyle, frameColor, frameThickness, yawFactor, pitch);
 
     ctx.restore();
   };
-  
-  // The rest of the helper drawing functions (drawLens, drawBridge, drawNosePads, drawTemples)
-  // are assumed to be defined below (omitted for brevity, as they don't seem to be the primary issue).
-  // The small changes to the input parameters (like reduced thickness and lens dimensions)
-  // should cascade into these functions, improving the overall look.
 
   const drawLens = (
     ctx: CanvasRenderingContext2D,
@@ -303,8 +292,8 @@ const RealisticGlassesOverlay = ({
     side: "left" | "right",
     yaw: number
   ) => {
-    // ... (Original drawLens logic)
     ctx.beginPath();
+
     const halfW = width / 2;
     const halfH = height / 2;
 
@@ -317,6 +306,7 @@ const RealisticGlassesOverlay = ({
         ctx.quadraticCurveTo(x, y + halfH, x - halfW * 0.7, y + halfH * 0.7);
         ctx.quadraticCurveTo(x - halfW, y, x - halfW * 0.7, y - halfH * 0.8);
         break;
+
       case "cat-eye":
         // Upswept corners
         const catLift = side === "left" ? -halfW * 0.3 : halfW * 0.3;
@@ -327,21 +317,22 @@ const RealisticGlassesOverlay = ({
         ctx.quadraticCurveTo(x + halfW, y + halfH * 0.8, x, y + halfH);
         ctx.quadraticCurveTo(x - halfW, y + halfH * 0.8, x - halfW, y);
         break;
+
       case "round":
         ctx.arc(x, y, Math.min(halfW, halfH), 0, Math.PI * 2);
         break;
+
       case "oversized":
         // Large rounded rectangle
         const overRadius = Math.min(halfW, halfH) * 0.4;
         ctx.roundRect(x - halfW, y - halfH * 1.1, width, height * 1.2, overRadius);
         break;
+
       case "rectangular":
       default:
         // Slightly rounded rectangle
         const radius = Math.min(halfW, halfH) * 0.15;
-        // NOTE: roundRect is not standard Canvas API, assuming polyfill or similar extension
-        // If not available, use basic bezier curves or fall back to rect.
-        ctx.roundRect(x - halfW, y - halfH, width, height, radius); 
+        ctx.roundRect(x - halfW, y - halfH, width, height, radius);
         break;
     }
 
@@ -355,7 +346,7 @@ const RealisticGlassesOverlay = ({
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Add subtle reflection (kept as is)
+    // Add subtle reflection
     ctx.save();
     ctx.globalAlpha = 0.15;
     ctx.beginPath();
@@ -367,7 +358,7 @@ const RealisticGlassesOverlay = ({
     ctx.fill();
     ctx.restore();
 
-    // Draw frame (kept as is)
+    // Draw frame
     ctx.strokeStyle = frameColor;
     ctx.lineWidth = thickness;
     ctx.lineCap = "round";
@@ -388,8 +379,8 @@ const RealisticGlassesOverlay = ({
   ) => {
     const leftEdge = leftX + lensWidth / 2;
     const rightEdge = rightX - lensWidth / 2;
-    const bridgeY = -lensHeight * 0.1; // Bridge sits slightly high on the frame
-    
+    const bridgeY = -lensHeight * 0.1;
+
     ctx.strokeStyle = color;
     ctx.lineWidth = thickness;
     ctx.lineCap = "round";
@@ -426,9 +417,8 @@ const RealisticGlassesOverlay = ({
     yaw: number
   ) => {
     const padY = lensHeight * 0.3;
-    // Pushing pads closer to the center of the face
-    const leftPadX = leftX + lensWidth * 0.25; 
-    const rightPadX = rightX - lensWidth * 0.25;
+    const leftPadX = leftX + lensWidth * 0.35;
+    const rightPadX = rightX - lensWidth * 0.35;
 
     ctx.fillStyle = color;
     
@@ -456,11 +446,11 @@ const RealisticGlassesOverlay = ({
     yawFactor: number,
     pitch: number
   ) => {
-    const templeY = -lensHeight * 0.2; // Temple start height
+    const templeY = -lensHeight * 0.2;
     const leftStartX = leftX - lensWidth / 2;
     const rightStartX = rightX + lensWidth / 2;
 
-    // Adjust temple visibility based on yaw (Kept as is)
+    // Adjust temple visibility based on yaw
     const leftOpacity = Math.max(0.3, 1 - Math.max(0, -pitch * 0.02));
     const rightOpacity = Math.max(0.3, 1 - Math.max(0, pitch * 0.02));
 
@@ -516,7 +506,7 @@ const RealisticGlassesOverlay = ({
   return null;
 };
 
-// Helper functions (Kept as is - ensure these are defined in your file)
+// Helper functions
 const getLensColorForFrame = (color: string, shape: string): string => {
   const baseColors: Record<string, string> = {
     gold: "rgba(139, 90, 43, 0.35)",
