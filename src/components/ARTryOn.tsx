@@ -9,6 +9,7 @@ import GlassesCarousel from "@/components/ar/GlassesCarousel";
 import ProductGlassesCarousel from "@/components/ar/ProductGlassesCarousel";
 import ARControls, { ARAdjustments, defaultAdjustments } from "@/components/ar/ARControls";
 import FrameShapePanel, { FrameShape } from "@/components/ar/FrameShapePanel";
+import LensColorSelector, { LensColor } from "@/components/ar/LensColorSelector";
 import { glassesStyles } from "@/data/glassesStyles";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNaira } from "@/utils/formatCurrency";
@@ -36,6 +37,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(null);
   const [arAdjustments, setArAdjustments] = useState<ARAdjustments>(defaultAdjustments);
   const [showARControls, setShowARControls] = useState(false);
+  const [selectedLensColor, setSelectedLensColor] = useState<LensColor>("clear");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -238,11 +240,15 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
         </div>
       </div>
 
-      {/* Frame Shape Panel */}
-      <div className="px-4 pb-2">
+      {/* Frame Shape Panel & Lens Color */}
+      <div className="px-4 pb-2 space-y-3">
         <FrameShapePanel
           selectedShape={selectedFrameShape}
           onSelect={setSelectedFrameShape}
+        />
+        <LensColorSelector
+          selectedColor={selectedLensColor}
+          onSelect={setSelectedLensColor}
         />
       </div>
 
@@ -304,6 +310,7 @@ const ARTryOn = ({ product, onClose, useRealProducts = true }: ARTryOnProps) => 
               selectedProduct={selectedProduct}
               frameStyle={selectedFrameShape}
               adjustments={arAdjustments}
+              lensColor={selectedLensColor}
             />
           ) : (
             <RealisticGlassesOverlay
