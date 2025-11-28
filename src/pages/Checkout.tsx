@@ -32,7 +32,7 @@ const Checkout = () => {
     cvv: "",
   });
 
-  const deliveryDate = addDays(new Date(), 3);
+  const deliveryDate = addDays(new Date(), 2);
 
   useEffect(() => {
     fetchCartData();
@@ -241,11 +241,11 @@ const Checkout = () => {
             </div>
 
             <h1 className="text-3xl font-bold mb-2 text-foreground animate-fade-in">
-              Your Glasses Are on the Way!
+              Order Confirmed!
             </h1>
             
             <p className="text-muted-foreground mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              Estimated Delivery Time:
+              Your glasses will arrive in 2 days.
             </p>
 
             <Card className="mb-8 shadow-elegant animate-scale-in" style={{ animationDelay: "0.2s" }}>
