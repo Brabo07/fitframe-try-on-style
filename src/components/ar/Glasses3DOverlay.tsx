@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { Tables } from "@/integrations/supabase/types";
 import { getFrameColorHex, getLensColor } from "@/data/glassesStyles";
 import type { FaceLandmarks } from "@/hooks/useFaceTracking";
+import type { LensColor } from "./LensColorSelector";
+import { getLensColorHex, getLensOpacity } from "./LensColorSelector";
 
 export interface ARAdjustments {
   offsetX: number;
@@ -20,6 +22,7 @@ interface Glasses3DOverlayProps {
   selectedProduct?: Tables<"glasses_products"> | null;
   frameStyle?: string;
   adjustments?: ARAdjustments;
+  lensColor?: LensColor;
 }
 
 // Smoothing class for stable positioning
@@ -71,11 +74,13 @@ const GlassesModel = ({
   smoother,
   frameColor, 
   lensColor,
+  lensOpacity,
   frameStyle 
 }: { 
   smoother: TransformSmoother;
   frameColor: string;
   lensColor: string;
+  lensOpacity: number;
   frameStyle: string;
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -106,16 +111,16 @@ const GlassesModel = ({
     return new THREE.MeshPhysicalMaterial({
       color,
       transparent: true,
-      opacity: 0.25,
+      opacity: lensOpacity,
       metalness: 0.0,
       roughness: 0.02,
-      transmission: 0.75,
+      transmission: Math.max(0.2, 0.85 - lensOpacity),
       thickness: 0.3,
       side: THREE.DoubleSide,
-      clearcoat: 0.1,
-      clearcoatRoughness: 0.1,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.08,
     });
-  }, [lensColor]);
+  }, [lensColor, lensOpacity]);
 
   // Frame dimensions based on style
   const dims = useMemo(() => {
@@ -278,6 +283,7 @@ const Scene = ({
   canvasHeight, 
   frameColor, 
   lensColor,
+  lensOpacity,
   frameStyle,
   adjustments
 }: { 
@@ -286,6 +292,7 @@ const Scene = ({
   canvasHeight: number;
   frameColor: string;
   lensColor: string;
+  lensOpacity: number;
   frameStyle: string;
   adjustments?: ARAdjustments;
 }) => {
@@ -359,6 +366,7 @@ const Scene = ({
         smoother={smootherRef.current}
         frameColor={frameColor}
         lensColor={lensColor}
+        lensOpacity={lensOpacity}
         frameStyle={frameStyle}
       />
     </>
@@ -372,16 +380,22 @@ const Glasses3DOverlay = ({
   selectedGlassesId,
   selectedProduct,
   frameStyle = "wayfarer",
-  adjustments
+  adjustments,
+  lensColor: selectedLensColor
 }: Glasses3DOverlayProps) => {
-  // Determine frame and lens colors
+  // Determine frame color from product
   const frameColor = selectedProduct 
     ? getFrameColorHex(selectedProduct.frame_color)
     : "#1a1a1a";
   
-  const lensColor = selectedProduct
-    ? getLensColor(selectedProduct.frame_color)
-    : "#4a90d9";
+  // Use selected lens color if provided, otherwise derive from product
+  const finalLensColor = selectedLensColor 
+    ? getLensColorHex(selectedLensColor)
+    : (selectedProduct ? getLensColor(selectedProduct.frame_color) : "#4a90d9");
+  
+  const lensOpacity = selectedLensColor 
+    ? getLensOpacity(selectedLensColor)
+    : 0.25;
 
   const actualFrameStyle = selectedProduct?.frame_style || frameStyle;
 
@@ -410,7 +424,8 @@ const Glasses3DOverlay = ({
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           frameColor={frameColor}
-          lensColor={lensColor}
+          lensColor={finalLensColor}
+          lensOpacity={lensOpacity}
           frameStyle={actualFrameStyle}
           adjustments={adjustments}
         />
